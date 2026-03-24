@@ -215,7 +215,7 @@ export default function Home() {
                     setTimeout(() => scrollToTopicSection(), 120);
                   }
                 }}
-                className={`group flex flex-col items-start text-left p-5 md:p-6 rounded-2xl border-2 transition-all duration-500 transform active:scale-[0.98] ${
+                className={`relative overflow-hidden group flex flex-col items-start text-left p-5 md:p-6 rounded-2xl border-2 transition-all duration-500 transform active:scale-[0.98] ${
                   isSelected 
                     ? `border-opacity-100 bg-opacity-10 shadow-xl` 
                     : `border-transparent bg-card hover:bg-hover/60 hover:border-border`
@@ -257,8 +257,10 @@ export default function Home() {
                 </div>
 
                 {/* Focus indicator bar */}
-                <div className={`absolute bottom-0 left-0 h-1 bg-accent transition-all duration-500 rounded-b-2xl ${isSelected ? "w-full" : "w-0"}`} 
-                     style={{ backgroundColor: themeColor }} />
+                <div
+                  className={`pointer-events-none absolute inset-x-0 bottom-0 h-1 transition-opacity duration-300 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                  style={{ backgroundColor: themeColor }}
+                />
               </button>
             );
           })}
