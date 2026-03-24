@@ -105,6 +105,7 @@ export async function startInterview(mode, topic = null, focus = {}) {
       focus_keyword: focus.focusKeyword || "",
       focus_label: focus.focusLabel || "",
       practice_context: focus.practiceContext || "",
+      practice_baseline: focus.practiceBaseline || null,
     }),
   });
   if (!res.ok) throw new Error(await res.text());

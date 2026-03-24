@@ -188,6 +188,31 @@ function AutoScoreCard({ autoScore }) {
   );
 }
 
+function PracticeComparisonCard({ comparison }) {
+  if (!comparison) return null;
+  return (
+    <div className="bg-card border border-green/20 rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="text-lg font-semibold">复练结果对比</div>
+        {typeof comparison.delta_score === "number" && (
+          <div className={`text-sm font-semibold ${comparison.delta_score >= 0 ? "text-green" : "text-red"}`}>
+            {comparison.delta_score >= 0 ? `+${comparison.delta_score}` : comparison.delta_score} 分
+          </div>
+        )}
+      </div>
+      {comparison.headline && <div className="text-[15px] leading-[1.8] text-text mb-3">{comparison.headline}</div>}
+      {comparison.bullets?.length > 0 && (
+        <div className="flex flex-col gap-1.5 mb-3">
+          {comparison.bullets.map((item, idx) => (
+            <div key={idx} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/6 border border-green/15">{item}</div>
+          ))}
+        </div>
+      )}
+      {comparison.verdict && <div className="text-[13px] text-dim">结论：{comparison.verdict}</div>}
+    </div>
+  );
+}
+
 function SoloRecordingReview({ topicsCovered, overall }) {
   const avgScore = overall?.avg_score || "-";
   return (
@@ -394,6 +419,13 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
         focusKeyword: `${questionText} ${focusLabel}`,
         focusLabel,
         practiceContext: `原题：${questionText}\n\n你的原回答：${answerMap[qId] || "（无）"}\n\n改进版答案：${improved}`,
+        practiceBaseline: {
+          question: questionText,
+          focus_label: focusLabel,
+          source_score: scoreMap[qId]?.score ?? null,
+          original_answer: answerMap[qId] || "",
+          improved_answer: improved,
+        },
       });
       navigate(`/interview/${data.session_id}`, { state: data });
     } catch (e) {
@@ -926,6 +958,7 @@ export default function Review() {
       />
 
       <AutoScoreCard autoScore={autoScore} />
+      <PracticeComparisonCard comparison={overall?.practice_comparison} />
 
       {isRecording && !isRecordingDual ? (
         <SoloRecordingReview topicsCovered={topicsCovered} overall={overall} />

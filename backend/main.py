@@ -37,6 +37,58 @@ from backend.auth import (
 from backend.runtime_settings import get_effective_settings, load_runtime_settings, save_runtime_settings, AdminSettingsModel
 from backend.query_hints import build_query_hints
 
+
+def _build_practice_comparison(baseline: dict | None, overall: dict | None) -> dict | None:
+    baseline = baseline or {}
+    overall = overall or {}
+    if not baseline:
+        return None
+
+    prev_score = baseline.get("source_score")
+    new_score = overall.get("avg_score")
+    delta = None
+    if isinstance(prev_score, (int, float)) and isinstance(new_score, (int, float)):
+        delta = round(float(new_score) - float(prev_score), 1)
+
+    targeting = overall.get("targeting_stats") or {}
+    focus_label = targeting.get("focus_label") or baseline.get("focus_label") or "本次复练目标"
+    focus_hit_rate = targeting.get("focus_hit_rate")
+    repair_rate = targeting.get("repair_rate")
+    repaired_count = targeting.get("repaired_count") or 0
+
+    if delta is None:
+        headline = f"本次围绕「{focus_label}」完成了一轮针对性复练。"
+    elif delta >= 1.0:
+        headline = f"相较上次原题表现，本次复练平均分提升了 {delta} 分。"
+    elif delta <= -1.0:
+        headline = f"这轮复练比上次原题表现低了 {abs(delta)} 分，说明还没完全内化。"
+    else:
+        headline = f"相较上次原题表现，本次复练整体接近持平（{delta:+.1f} 分）。"
+
+    bullets = []
+    if focus_hit_rate is not None:
+        bullets.append(f"题目命中复练目标的比例为 {int(float(focus_hit_rate) * 100)}%")
+    if repair_rate is not None:
+        bullets.append(f"命中目标后达到“较稳”阈值的比例为 {int(float(repair_rate) * 100)}%")
+    if repaired_count:
+        bullets.append(f"本轮共有 {repaired_count} 道题显示出明显修复迹象")
+    if baseline.get("question"):
+        bullets.append(f"复练基线来自原题：{baseline.get('question')[:60]}")
+
+    verdict = "可以进入下一层追问。" if (isinstance(delta, (int, float)) and delta >= 1 and (repair_rate or 0) >= 0.5) else "建议继续围绕同一薄弱点做一轮短打复练。"
+
+    return {
+        "headline": headline,
+        "delta_score": delta,
+        "focus_label": focus_label,
+        "focus_hit_rate": focus_hit_rate,
+        "repair_rate": repair_rate,
+        "repaired_count": repaired_count,
+        "bullets": bullets,
+        "verdict": verdict,
+        "baseline": baseline,
+    }
+
 app = FastAPI(title="TechSpar", version="0.2.0")
 
 
@@ -1184,6 +1236,12 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
         except RuntimeError as e:
             raise HTTPException(500, str(e))
         create_session(session_id, req.mode.value, req.topic, questions=questions, user_id=user_id)
+        practice_baseline = req.practice_baseline or None
+        if req.practice_context and not practice_baseline:
+            practice_baseline = {
+                "focus_label": req.focus_label,
+                "focus_keyword": req.focus_keyword,
+            }
         _drill_sessions[session_id] = {
             "topic": req.topic,
             "questions": questions,
@@ -1191,6 +1249,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
             "focus_keyword": req.focus_keyword,
             "focus_label": req.focus_label,
             "practice_context": req.practice_context,
+            "practice_baseline": practice_baseline,
         }
 
         return {
@@ -1200,6 +1259,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
             "questions": questions,
             "focus_keyword": req.focus_keyword,
             "focus_label": req.focus_label,
+            "practice_baseline": practice_baseline,
         }
     else:
         # ── Resume mode: LangGraph interactive interview ──
@@ -1311,6 +1371,9 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
             focus_keyword=entry.get("focus_keyword"),
             focus_label=entry.get("focus_label"),
         )
+        practice_comparison = _build_practice_comparison(entry.get("practice_baseline"), overall)
+        if practice_comparison:
+            overall["practice_comparison"] = practice_comparison
 
         # Generate review text from eval
         review = _format_drill_review(questions, answers, scores, overall)
