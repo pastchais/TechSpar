@@ -272,6 +272,9 @@ def _build_next_focus_recommendation(wp: dict) -> dict | None:
             "confidence": "high" if (float(best.get("focus_hit_rate", 0.0) or 0.0) >= 0.7 or int(best.get("attempts", 0) or 0) >= 2) else "medium",
             "reason": "；".join(reason_bits),
             "topic_level": bool(best.get("topic_level", False)),
+            "trend_label": best.get("trend_label"),
+            "trend_summary": best.get("trend_summary"),
+            "trend_advice": best.get("trend_advice"),
         }
 
     if semantic_buckets or semantic_bucket:

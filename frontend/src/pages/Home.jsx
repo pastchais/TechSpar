@@ -138,6 +138,32 @@ export default function Home() {
       : primaryRecommendation?.adaptive_strategy
         ? "稳固"
         : null;
+  const recommendationTrend = primaryRecommendation?.trend_label || "";
+  const recommendationActionText = recommendationTrend === "进入平台期"
+    ? "建议升级题型"
+    : recommendationTrend === "出现回退"
+      ? "建议先稳住基础"
+      : recommendationTrend === "持续上升"
+        ? "可以直接进阶训练"
+        : recommendationTrend === "波动明显"
+          ? "建议先做稳定性验收"
+          : "建议优先处理";
+  const recommendationPrimaryButton = recommendationTrend === "进入平台期"
+    ? "开始升级训练"
+    : recommendationTrend === "出现回退"
+      ? "开始稳固训练"
+      : recommendationTrend === "持续上升"
+        ? "开始进阶训练"
+        : "立即开始推荐训练";
+  const recommendationSecondaryHint = recommendationTrend === "进入平台期"
+    ? "当前同类 focus 已接近平台期，别再刷同层题，建议直接进入更深的追问和场景题。"
+    : recommendationTrend === "出现回退"
+      ? "最近这类 focus 有回退迹象，建议先回到概念边界和稳定表达，再恢复强度。"
+      : recommendationTrend === "持续上升"
+        ? "这类 focus 正在稳定变好，可以直接带着当前状态进入更深一轮验收。"
+        : recommendationTrend === "波动明显"
+          ? "这类 focus 还不够稳定，建议先固定结构，再做一轮验收型训练。"
+          : null;
   const modeMeta = {
     resume: {
       label: "简历模拟面试",
@@ -340,8 +366,12 @@ export default function Home() {
                     {primaryRecommendation.topic && <Badge tone="accent">{topics[primaryRecommendation.topic]?.name || primaryRecommendation.topic}</Badge>}
                   </div>
                   <div className="text-sm font-medium text-text">{primaryRecommendation.focus_label || primaryRecommendation.title}</div>
+                  {recommendationTrend && (
+                    <div className="mt-1 text-[12px] font-medium text-accent-light">{recommendationActionText} · {recommendationTrend}</div>
+                  )}
                   <div className="mt-1 text-[12px] text-dim leading-[1.7]">
                     {primaryRecommendation.why_now || primaryRecommendation.reason || "根据你的近期画像，优先从这个目标开始更划算。"}
+                    {recommendationSecondaryHint ? ` ${recommendationSecondaryHint}` : ""}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -355,7 +385,7 @@ export default function Home() {
                       )}
                       className="bg-green/10 py-1.5 text-[12px] text-green hover:text-green"
                     >
-                      立即开始推荐训练
+                      {recommendationPrimaryButton}
                     </SubtleButton>
                   )}
                   {primaryRecommendation.topic && (
@@ -435,8 +465,8 @@ export default function Home() {
               <div className="text-[13px] font-semibold text-text mb-1">当前训练目标</div>
               <div className="text-[12px] text-dim">
                 {quickFocus
-                  ? `优先围绕「${quickFocusLabel || quickFocus}」修复薄弱点，再进入当前专题训练。`
-                  : `建议优先训练「${topics[primaryRecommendation?.topic]?.name || primaryRecommendation?.topic || "当前推荐专题"}」${primaryRecommendation?.focus_label ? `，并从「${primaryRecommendation.focus_label}」切入。` : "。"}`}
+                  ? `优先围绕「${quickFocusLabel || quickFocus}」${recommendationTrend === "进入平台期" ? "升级追问与场景题验证" : recommendationTrend === "出现回退" ? "先做降阶稳固训练" : recommendationTrend === "持续上升" ? "做更深一层的验收" : "修复薄弱点"}，再进入当前专题训练。`
+                  : `建议优先训练「${topics[primaryRecommendation?.topic]?.name || primaryRecommendation?.topic || "当前推荐专题"}」${primaryRecommendation?.focus_label ? `，并从「${primaryRecommendation.focus_label}」切入。` : "。"}${recommendationTrend ? ` 当前轨迹为「${recommendationTrend}」。` : ""}`}
               </div>
             </div>
           )}
@@ -498,7 +528,7 @@ export default function Home() {
                   {isRecommendedTopic && (
                     <div className="px-3 pb-3 pt-1">
                       <div className="rounded-lg bg-orange/8 px-2.5 py-2 text-[11px] leading-[1.7] break-words text-dim">
-                        推荐原因：{primaryRecommendation?.focus_label ? `可从「${primaryRecommendation.focus_label}」切入。` : "这是你当前更该优先修复的专题。"}
+                        推荐原因：{primaryRecommendation?.focus_label ? `可从「${primaryRecommendation.focus_label}」切入。` : "这是你当前更该优先修复的专题。"}{recommendationTrend ? ` 当前轨迹：${recommendationTrend}。` : ""}
                       </div>
                     </div>
                   )}
