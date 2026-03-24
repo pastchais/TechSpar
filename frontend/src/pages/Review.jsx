@@ -1,6 +1,7 @@
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import { PageTitle } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
 import { getReview, getReferenceAnswer, scoreInterviewAnswer, getTopics } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
@@ -670,10 +671,11 @@ export default function Review() {
 
   return (
     <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-3xl mx-auto w-full">
-      <div className="mb-8">
-        <div className="text-[26px] leading-tight md:text-[28px] font-display font-bold mb-2">{isRecording ? "录音复盘" : showDrill ? "训练复盘" : "面试复盘"}</div>
-        <div className="text-[13px] leading-6 text-dim break-all">Session: {sessionId}</div>
-      </div>
+      <PageTitle
+        className="mb-8"
+        title={isRecording ? "录音复盘" : showDrill ? "训练复盘" : "面试复盘"}
+        subtitle={`Session: ${sessionId}`}
+      />
 
       <AutoScoreCard autoScore={autoScore} />
 

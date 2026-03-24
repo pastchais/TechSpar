@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { FileText, ChevronRight, Mic } from "lucide-react";
 import TopicCard from "../components/TopicCard";
 import { getTopics, startInterview, getResumeStatus, uploadResume, getProfile } from "../api/interview";
+import { Badge, SubtleButton } from "../components/ui.jsx";
 
 function recommendationBadge(confidence) {
   if (confidence === "high") return "bg-green/10 text-green";
@@ -271,12 +272,9 @@ export default function Home() {
         )}
 
         <div className="mt-4 flex justify-center">
-          <button
-            onClick={() => navigate("/recording")}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium text-dim bg-hover hover:text-accent-light transition-all"
-          >
+          <SubtleButton onClick={() => navigate("/recording")}>
             录音复盘工具 <ChevronRight size={14} />
-          </button>
+          </SubtleButton>
         </div>
 
       </div>
@@ -337,7 +335,7 @@ export default function Home() {
                     <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${recommendationBadge(primaryRecommendation.confidence)}`}>
                       {primaryRecommendation.confidence === "high" ? "高置信推荐" : primaryRecommendation.confidence === "medium" ? "可尝试" : "探索建议"}
                     </span>
-                    {primaryRecommendation.topic && <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light">{topics[primaryRecommendation.topic]?.name || primaryRecommendation.topic}</span>}
+                    {primaryRecommendation.topic && <Badge tone="accent">{topics[primaryRecommendation.topic]?.name || primaryRecommendation.topic}</Badge>}
                   </div>
                   <div className="text-sm font-medium text-text">{primaryRecommendation.focus_label || primaryRecommendation.title}</div>
                   <div className="mt-1 text-[12px] text-dim leading-[1.7]">

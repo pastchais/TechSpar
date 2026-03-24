@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronRight, AlertTriangle, X } from "lucide-react";
 import { getProfile, getTopics, resetProfile } from "../api/interview";
 import { topicBadgeLabel, topicDisplayName } from "../utils/topicLabels";
+import { Badge } from "../components/ui.jsx";
 
 function CollapsibleList({ items, limit, renderItem, renderExpandedItem, expandedLabel = "查看完整内容", expandedTitle = "完整展开" }) {
   const [expanded, setExpanded] = useState(false);
@@ -119,7 +120,7 @@ function CoachSuggestionCard({ primary, alternatives, navigate, topics }) {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${tone.cls}`}>{tone.label}</span>
-            {primary.topic && <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light">{topicBadgeLabel(primary.topic, topics)}</span>}
+            {primary.topic && <Badge tone="accent">{topicBadgeLabel(primary.topic, topics)}</Badge>}
             {primary.adaptive_strategy && <span className="text-[11px] text-dim">{primary.adaptive_strategy}</span>}
           </div>
           <span className="text-[12px] text-dim">推荐分 {primary.score}</span>
@@ -141,7 +142,7 @@ function CoachSuggestionCard({ primary, alternatives, navigate, topics }) {
           {primary.topic && (
             <button
               onClick={() => navigate("/knowledge", { state: { selectedTopic: primary.topic, searchKeyword: primary.pre_read_keyword || primary.focus_label } })}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-hover text-dim border-none cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl bg-hover px-3 py-1.5 text-[12px] font-medium text-dim border-none cursor-pointer transition-all hover:text-accent-light"
             >
               先看题库
             </button>
