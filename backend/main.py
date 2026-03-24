@@ -38,6 +38,36 @@ from backend.runtime_settings import get_effective_settings, load_runtime_settin
 from backend.query_hints import build_query_hints
 
 
+def _describe_focus_trend_training(focus_trend: str | None) -> dict | None:
+    trend = (focus_trend or "").strip()
+    if not trend:
+        return None
+    if trend == "进入平台期":
+        return {
+            "label": "平台期突破训练",
+            "summary": "这轮会减少基础确认题，改用 why、边界条件、反例和场景题来打破平台。",
+        }
+    if trend == "出现回退":
+        return {
+            "label": "回退稳固训练",
+            "summary": "这轮会先用基础概念辨析和稳定表达题把核心认知重新稳住，再逐步加压。",
+        }
+    if trend == "持续上升":
+        return {
+            "label": "迁移验收训练",
+            "summary": "这轮会减少基础修复题，增加迁移题、跨场景题和工程权衡题，验证是否真正内化。",
+        }
+    if trend == "波动明显":
+        return {
+            "label": "稳定性验收训练",
+            "summary": "这轮会围绕同一知识点换角度重复验收，重点检查是否稳定掌握，而不是偶尔答对。",
+        }
+    return {
+        "label": "针对性训练",
+        "summary": "这轮会根据你的当前轨迹动态调整题型。",
+    }
+
+
 def _build_practice_comparison(baseline: dict | None, overall: dict | None) -> dict | None:
     baseline = baseline or {}
     overall = overall or {}
@@ -1243,6 +1273,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
                 "focus_label": req.focus_label,
                 "focus_keyword": req.focus_keyword,
             }
+        trend_training_meta = _describe_focus_trend_training(req.focus_trend)
         _drill_sessions[session_id] = {
             "topic": req.topic,
             "questions": questions,
@@ -1250,6 +1281,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
             "focus_keyword": req.focus_keyword,
             "focus_label": req.focus_label,
             "focus_trend": req.focus_trend,
+            "trend_training_meta": trend_training_meta,
             "practice_context": req.practice_context,
             "practice_baseline": practice_baseline,
         }
@@ -1262,6 +1294,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
             "focus_keyword": req.focus_keyword,
             "focus_label": req.focus_label,
             "focus_trend": req.focus_trend,
+            "trend_training_meta": trend_training_meta,
             "practice_baseline": practice_baseline,
         }
     else:
@@ -1374,6 +1407,10 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
             focus_keyword=entry.get("focus_keyword"),
             focus_label=entry.get("focus_label"),
         )
+        if entry.get("focus_trend"):
+            overall["targeting_stats"]["focus_trend"] = entry.get("focus_trend")
+        if entry.get("trend_training_meta"):
+            overall["trend_training_meta"] = entry.get("trend_training_meta")
         practice_comparison = _build_practice_comparison(entry.get("practice_baseline"), overall)
         if practice_comparison:
             overall["practice_comparison"] = practice_comparison

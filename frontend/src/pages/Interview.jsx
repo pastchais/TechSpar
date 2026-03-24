@@ -60,6 +60,7 @@ export default function Interview() {
   const currentQ = questions[currentIndex];
   const totalQ = questions.length;
   const answeredCount = Object.keys(answers).length;
+  const trendTrainingMeta = initData.trend_training_meta || null;
 
   const handleDrillSubmit = () => {
     const text = drillInput.trim();
@@ -208,6 +209,15 @@ export default function Interview() {
             </div>
           ) : currentQ ? (
             <>
+              {trendTrainingMeta && (
+                <div className="w-full max-w-[720px] rounded-2xl border border-green/20 bg-green/5 px-4 py-3">
+                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                    <span className="text-[12px] font-semibold text-green bg-green/10 px-2.5 py-1 rounded-md">{trendTrainingMeta.label}</span>
+                    {initData.focus_trend && <span className="text-[12px] text-dim">轨迹状态：{initData.focus_trend}</span>}
+                  </div>
+                  <div className="text-[13px] text-dim leading-[1.7]">{trendTrainingMeta.summary}</div>
+                </div>
+              )}
               {/* Progress bar */}
               <div className="w-full max-w-[720px] flex items-center gap-2">
                 <div className="flex-1 h-1 rounded-sm bg-border overflow-hidden">

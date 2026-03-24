@@ -188,6 +188,20 @@ function AutoScoreCard({ autoScore }) {
   );
 }
 
+function TrendTrainingMetaCard({ meta, focusTrend }) {
+  if (!meta) return null;
+  return (
+    <div className="bg-card border border-green/20 rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <div className="text-lg font-semibold">本轮训练说明</div>
+        <span className="px-2.5 py-1 rounded-md text-[12px] font-medium bg-green/10 text-green">{meta.label}</span>
+        {focusTrend && <span className="text-[12px] text-dim">轨迹状态：{focusTrend}</span>}
+      </div>
+      <div className="text-[14px] text-text leading-[1.8]">{meta.summary}</div>
+    </div>
+  );
+}
+
 function PracticeComparisonCard({ comparison }) {
   if (!comparison) return null;
   return (
@@ -524,6 +538,7 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
         practiceBaseline: {
           question: questionText,
           focus_label: focusLabel,
+          focus_trend: overall?.targeting_stats?.focus_trend || overall?.practice_comparison?.baseline?.focus_trend || "",
           source_score: scoreMap[qId]?.score ?? null,
           original_answer: answerMap[qId] || "",
           improved_answer: improved,
@@ -1074,6 +1089,7 @@ export default function Review() {
       />
 
       <AutoScoreCard autoScore={autoScore} />
+      <TrendTrainingMetaCard meta={overall?.trend_training_meta} focusTrend={overall?.targeting_stats?.focus_trend || overall?.practice_comparison?.baseline?.focus_trend} />
       <PracticeComparisonCard comparison={overall?.practice_comparison} />
       <PracticeTrendCard focusLabel={overall?.practice_comparison?.focus_label} items={practiceTrend} />
 
