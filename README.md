@@ -132,16 +132,25 @@ ALLOW_REGISTRATION=false
 
 ```bash
 # 仅重建前端
-./scripts/deploy.sh frontend
+./scripts/deploy.sh deploy frontend
 
 # 仅重建后端
-./scripts/deploy.sh backend
+./scripts/deploy.sh deploy backend
 
 # 整体重建
-./scripts/deploy.sh all
+./scripts/deploy.sh deploy all
+
+# 重启前端
+./scripts/deploy.sh restart frontend
+
+# 查看日志
+./scripts/deploy.sh logs frontend
 
 # 查看状态
 ./scripts/deploy.sh status
+
+# 拉取最新代码
+./scripts/deploy.sh pull
 ```
 
 访问 `http://localhost`。

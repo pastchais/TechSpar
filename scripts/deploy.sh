@@ -4,29 +4,90 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE="$ROOT/scripts/compose.sh"
 COMPOSE_FILE="${COMPOSE_FILE:-$ROOT/docker-compose.prod.yml}"
-TARGET="${1:-frontend}"
+ACTION="${1:-deploy}"
+TARGET="${2:-frontend}"
 
 cd "$ROOT"
 
-case "$TARGET" in
-  frontend)
-    SERVICES=(techspar-frontend)
+services_for() {
+  case "$1" in
+    frontend)
+      echo "techspar-frontend"
+      ;;
+    backend)
+      echo "techspar-backend"
+      ;;
+    caddy)
+      echo "caddy"
+      ;;
+    all)
+      echo "techspar-backend techspar-frontend caddy"
+      ;;
+    *)
+      echo ""
+      return 1
+      ;;
+  esac
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/deploy.sh deploy  {frontend|backend|caddy|all}
+  ./scripts/deploy.sh restart {frontend|backend|caddy|all}
+  ./scripts/deploy.sh start   {frontend|backend|caddy|all}
+  ./scripts/deploy.sh stop    {frontend|backend|caddy|all}
+  ./scripts/deploy.sh logs    {frontend|backend|caddy|all}
+  ./scripts/deploy.sh ps
+  ./scripts/deploy.sh status
+  ./scripts/deploy.sh pull
+EOF
+}
+
+case "$ACTION" in
+  deploy)
+    SERVICES=$(services_for "$TARGET") || { usage >&2; exit 2; }
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" build $SERVICES
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" up -d --force-recreate $SERVICES
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" ps $SERVICES
     ;;
-  backend)
-    SERVICES=(techspar-backend)
+  restart)
+    SERVICES=$(services_for "$TARGET") || { usage >&2; exit 2; }
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" restart $SERVICES
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" ps $SERVICES
     ;;
-  all)
-    SERVICES=(techspar-backend techspar-frontend caddy)
+  start)
+    SERVICES=$(services_for "$TARGET") || { usage >&2; exit 2; }
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" up -d $SERVICES
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" ps $SERVICES
     ;;
-  status)
+  stop)
+    SERVICES=$(services_for "$TARGET") || { usage >&2; exit 2; }
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" stop $SERVICES
+    # shellcheck disable=SC2086
+    "$COMPOSE" -f "$COMPOSE_FILE" ps $SERVICES
+    ;;
+  logs)
+    SERVICES=$(services_for "$TARGET") || { usage >&2; exit 2; }
+    # shellcheck disable=SC2086
+    exec "$COMPOSE" -f "$COMPOSE_FILE" logs --tail=120 $SERVICES
+    ;;
+  ps|status)
     exec "$COMPOSE" -f "$COMPOSE_FILE" ps
     ;;
+  pull)
+    exec git -C "$ROOT" pull --ff-only
+    ;;
   *)
-    echo "Usage: $0 {frontend|backend|all|status}" >&2
+    usage >&2
     exit 2
     ;;
 esac
-
-"$COMPOSE" -f "$COMPOSE_FILE" build "${SERVICES[@]}"
-"$COMPOSE" -f "$COMPOSE_FILE" up -d --force-recreate "${SERVICES[@]}"
-"$COMPOSE" -f "$COMPOSE_FILE" ps "${SERVICES[@]}"
