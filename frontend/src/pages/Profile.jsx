@@ -155,7 +155,7 @@ function CoachSuggestionCard({ primary, alternatives, navigate, topics }) {
                 <button
                   key={`${item.topic || 'general'}-${idx}`}
                   onClick={() => item.topic && navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: item.topic, quickStartFocusKeyword: item.focus_keyword || item.focus_label, quickStartFocusLabel: item.focus_label } })}
-                  className="px-2 py-1 rounded text-[11px] font-medium bg-hover text-dim border-none cursor-pointer max-w-[280px] truncate"
+                  className="px-2 py-1 rounded text-[11px] font-medium bg-hover text-dim border-none cursor-pointer max-w-full break-words text-left sm:max-w-[280px] sm:truncate"
                   title={`${item.focus_label}${item.topic ? ` · ${topicBadgeLabel(item.topic, topics)}` : ""}`}
                 >
                   {item.focus_label}{item.topic ? ` · ${topicBadgeLabel(item.topic, topics)}` : ""}
@@ -196,7 +196,7 @@ function WeakPointDetailContent({ w, navigate, nextTone }) {
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${nextTone.cls}`}>{nextTone.label}</span>
             <span className="text-[12px] font-medium text-text">下一次更建议练</span>
-            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light max-w-[220px] truncate" title={w.next_focus_recommendation.focus_label}>
+            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light max-w-full break-words sm:max-w-[220px] sm:truncate" title={w.next_focus_recommendation.focus_label}>
               {w.next_focus_recommendation.focus_label}
             </span>
           </div>
@@ -207,7 +207,7 @@ function WeakPointDetailContent({ w, navigate, nextTone }) {
         <div className="rounded-lg border border-green/20 bg-green/5 px-3 py-2">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-[12px] font-medium text-text">历史上更有效的修复 focus</span>
-            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green max-w-[220px] truncate" title={w.best_focus.focus_label}>
+            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green max-w-full break-words sm:max-w-[220px] sm:truncate" title={w.best_focus.focus_label}>
               {w.best_focus.focus_label}
             </span>
             <span className="text-[11px] text-dim">命中率 {(Number(w.best_focus.focus_hit_rate || 0) * 100).toFixed(0)}%</span>
@@ -219,7 +219,7 @@ function WeakPointDetailContent({ w, navigate, nextTone }) {
                 <button
                   key={`${f.focus_label}-${idx}`}
                   onClick={() => w.topic && navigate("/knowledge", { state: { selectedTopic: w.topic, searchKeyword: f.focus_label } })}
-                  className="px-2 py-0.5 rounded text-[11px] font-medium bg-hover text-dim border-none cursor-pointer max-w-[220px] truncate"
+                  className="px-2 py-0.5 rounded text-[11px] font-medium bg-hover text-dim border-none cursor-pointer max-w-full break-words text-left sm:max-w-[220px] sm:truncate"
                   title={`${f.focus_label} · 命中率 ${(Number(f.focus_hit_rate || 0) * 100).toFixed(0)}% · 回升率 ${(Number(f.improvement_rate || 0) * 100).toFixed(0)}%`}
                 >
                   {f.focus_label} · {(Number(f.improvement_rate || 0) * 100).toFixed(0)}%
@@ -282,7 +282,7 @@ function WeakPointDetailModal({ w, navigate, setStrategyFilter, topics, onClose 
 
           <div className="mb-4 flex items-center gap-2 flex-wrap">
             {w.next_focus_recommendation && (
-              <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${nextTone.cls} max-w-[220px] truncate`} title={w.next_focus_recommendation.focus_label}>
+              <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${nextTone.cls} max-w-full break-words sm:max-w-[220px] sm:truncate`} title={w.next_focus_recommendation.focus_label}>
                 推荐 {w.next_focus_recommendation.focus_label}
               </span>
             )}
@@ -330,7 +330,7 @@ function WeakPointCard({ w, navigate, setStrategyFilter, topics, onOpenDetails }
             {w.repair_success_rate != null && w.repair_attempts ? <span> · 修复率 {(Number(w.repair_success_rate) * 100).toFixed(0)}%</span> : null}
           </div>
         </button>
-        <div className="flex items-center gap-2 text-xs text-dim shrink-0 flex-wrap justify-end">
+        <div className="flex items-center gap-2 text-xs text-dim flex-wrap justify-start md:justify-end">
           {w.topic && (
             <button
               onClick={() => navigate(`/profile/topic/${w.topic}`)}
@@ -352,7 +352,7 @@ function WeakPointCard({ w, navigate, setStrategyFilter, topics, onOpenDetails }
           {badge.label}
         </button>
         {w.next_focus_recommendation && (
-          <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${nextTone.cls} max-w-[220px] truncate`} title={w.next_focus_recommendation.focus_label}>
+          <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${nextTone.cls} max-w-full break-words sm:max-w-[220px] sm:truncate`} title={w.next_focus_recommendation.focus_label}>
             推荐 {w.next_focus_recommendation.focus_label}
           </span>
         )}
@@ -373,7 +373,7 @@ function CompactWeakPointRow({ w, topics, onOpenDetails }) {
 
   return (
     <div className="rounded-xl border border-border bg-card px-3.5 py-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="text-sm text-text leading-[1.7]">{w.point}</div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
@@ -383,7 +383,7 @@ function CompactWeakPointRow({ w, topics, onOpenDetails }) {
             {w.topic && <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light">{topicBadgeLabel(w.topic, topics)}</span>}
             <span className="text-[11px] text-dim">优先级 {w.priority_score ?? "-"}</span>
             {w.next_focus_recommendation && (
-              <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${nextTone.cls} max-w-[220px] truncate`} title={w.next_focus_recommendation.focus_label}>
+              <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${nextTone.cls} max-w-full break-words sm:max-w-[220px] sm:truncate`} title={w.next_focus_recommendation.focus_label}>
                 {w.next_focus_recommendation.focus_label}
               </span>
             )}
@@ -629,7 +629,7 @@ export default function Profile() {
                 </div>
                 {item.focus_label && (
                   <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green max-w-[220px] truncate" title={item.focus_label}>{item.focus_label}</span>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green max-w-full break-words sm:max-w-[220px] sm:truncate" title={item.focus_label}>{item.focus_label}</span>
                     <button
                       onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: item.topic, quickStartFocusKeyword: item.focus_label, quickStartFocusLabel: item.focus_label } })}
                       className="px-2 py-0.5 rounded text-[11px] font-medium bg-hover text-dim border-none cursor-pointer"

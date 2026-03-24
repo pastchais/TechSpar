@@ -290,21 +290,21 @@ export default function Home() {
                 查看画像 <ChevronRight size={14} className="inline align-middle" />
               </span>
             </div>
-            <div className="flex flex-wrap gap-4 md:gap-6">
-              <div className="text-center min-w-[60px]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4 md:gap-6">
+              <div className="text-center sm:text-left min-w-[60px]">
                 <div className="text-2xl font-bold text-accent-light">{stats.total_sessions}</div>
                 <div className="text-[11px] text-dim mt-0.5">总练习</div>
               </div>
-              <div className="text-center min-w-[60px]">
+              <div className="text-center sm:text-left min-w-[60px]">
                 <div className="text-2xl font-bold text-green">{stats.avg_score || "-"}</div>
                 <div className="text-[11px] text-dim mt-0.5">综合平均</div>
               </div>
               {topTopics.length > 0 && (
-                <div className="flex-1 min-w-[180px]">
+                <div className="flex-1 min-w-0 sm:min-w-[180px]">
                   <div className="text-[11px] text-dim mb-1.5">当前更该关注</div>
                   {topTopics.map(([t, d], idx) => (
                     <div key={t} className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs w-[90px] ${idx === 0 ? "text-orange" : "text-text"}`}>{topics[t]?.name || t}</span>
+                      <span className={`text-xs w-[84px] sm:w-[90px] break-words leading-4 ${idx === 0 ? "text-orange" : "text-text"}`}>{topics[t]?.name || t}</span>
                       <div className="flex-1 h-1 rounded-sm bg-border overflow-hidden">
                         <div className={`h-full rounded-sm ${idx === 0 ? "bg-orange" : "bg-accent-light"}`} style={{ width: `${d.score || 0}%` }} />
                       </div>
@@ -314,7 +314,7 @@ export default function Home() {
                 </div>
               )}
               {lastEntry && (
-                <div className="text-center min-w-[80px]">
+                <div className="text-center sm:text-left min-w-[80px]">
                   <div className={`text-2xl font-bold ${lastEntry.avg_score >= 6 ? "text-green" : "text-orange"}`}>
                     {lastEntry.avg_score}
                   </div>
@@ -520,7 +520,7 @@ export default function Home() {
                 </span>
               )}
               {(quickFocusLabel || quickFocus) && (
-                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-orange/15 text-orange max-w-[260px] truncate" title={quickFocusLabel || quickFocus}>
+                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-orange/15 text-orange max-w-full sm:max-w-[260px] break-words sm:truncate" title={quickFocusLabel || quickFocus}>
                   重点：{quickFocusLabel || quickFocus}
                 </span>
               )}
