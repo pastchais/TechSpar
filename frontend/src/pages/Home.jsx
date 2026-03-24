@@ -54,7 +54,7 @@ export default function Home() {
       if (quickTopic) setSelectedTopic(quickTopic);
       setQuickFocus(quickFocusKeyword);
       setQuickFocusLabel(quickFocusLabelText);
-      setPresetNotice(quickFocusKeyword || quickTopic ? "已按画像为你带入本轮训练目标" : "");
+      setPresetNotice(quickFocusKeyword || quickTopic ? "已应用推荐训练目标" : "");
       setTimeout(() => scrollToSummary(), 120);
       navigate(location.pathname, { replace: true, state: {} });
     }
@@ -142,13 +142,13 @@ export default function Home() {
       label: "简历模拟面试",
       icon: <FileText size={22} />,
       color: "accent",
-      hint: "基于你的简历进行全流程模拟，系统会针对你的项目经验和技术栈进行深度追问。",
+      hint: "基于简历生成模拟面试与追问。",
     },
     topic_drill: {
       label: "专题强化训练",
       icon: <Mic size={22} />,
       color: "green",
-      hint: "针对特定技术专题（如 MySQL 锁、Spring 事务）进行高频定向练习，快速修复弱点。",
+      hint: "围绕单个专题集中训练。",
     },
   };
 
@@ -179,15 +179,12 @@ export default function Home() {
           TechSpar
         </h1>
         <p className="text-base text-dim max-w-[500px] relative">
-          越练越懂你的 AI 面试教练——追踪你的成长轨迹，精准命中薄弱点
+          AI 面试训练系统——追踪成长轨迹，定位薄弱点
         </p>
       </div>
 
       {/* Mode switch - Refined Interactivity */}
       <div className="w-full max-w-[700px] mb-8 animate-slide-up" ref={modeSectionRef}>
-        <div className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-accent-light/80">
-          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" /> Step 1
-        </div>
         <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-4 md:px-5">
           <div className="text-[18px] font-semibold text-text">选择本轮训练模式</div>
         </div>
@@ -278,13 +275,6 @@ export default function Home() {
           </button>
         </div>
 
-        {!mode && (
-          <div className="mt-4 text-center px-4 py-3 rounded-xl bg-accent/5 border border-accent/10">
-            <p className="text-[13px] text-accent-light leading-relaxed">
-              💡 还没想好练什么？如果你已有画像，下方的<span className="font-semibold">“推荐起点”</span>会直接为你配置好最佳路径。
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Quick stats + recommendation */}
@@ -338,7 +328,6 @@ export default function Home() {
             <div className={`${panelTone("recommend")} rounded-xl px-5 py-4 md:px-6`}>
               <div className="flex justify-between items-start gap-3 flex-wrap">
                 <div>
-                  <div className="text-[12px] text-dim mb-1">如果你不想自己从头选，这里就是最快的开始方式。</div>
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
                     <span className="text-[15px] font-semibold">推荐起点</span>
                     <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${recommendationBadge(primaryRecommendation.confidence)}`}>
@@ -372,7 +361,7 @@ export default function Home() {
                         setSelectedTopic(primaryRecommendation.topic);
                         setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
                         setQuickFocusLabel(primaryRecommendation.focus_label || "");
-                        setPresetNotice("已按画像为你带入本轮训练目标");
+                        setPresetNotice("已应用推荐训练目标");
                         setTimeout(() => scrollToSummary(), 100);
                       }}
                       className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
@@ -398,8 +387,7 @@ export default function Home() {
       {/* Resume upload */}
       {mode === "resume" && (
         <div className="w-full max-w-[700px] mb-8" ref={resumeSectionRef}>
-          <div className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-accent-light/80">Step 2</div>
-          <div className="mb-2 text-[15px] font-semibold text-text">上传简历以生成模拟面试</div>
+                    <div className="mb-2 text-[15px] font-semibold text-text">上传简历以生成模拟面试</div>
           <div className="mb-3 text-[12px] text-dim leading-[1.7]">上传后，系统会基于你的项目和技术栈生成追问路径。</div>
           {resumeFile ? (
             <div className="flex items-center justify-between px-4 py-4 md:px-5 bg-card border border-border rounded-xl">
@@ -428,14 +416,13 @@ export default function Home() {
       {/* Topic selection */}
       {mode === "topic_drill" && (
         <div className="w-full max-w-[700px]" ref={topicSectionRef}>
-          <div className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-accent-light/80">Step 2</div>
-          {presetNotice && (
+                    {presetNotice && (
             <div className={`${panelTone("preset")} mb-4 rounded-xl px-4 py-3`}>
-              <div className="text-[13px] font-semibold text-text mb-1">已按画像带入训练目标</div>
+              <div className="text-[13px] font-semibold text-text mb-1">已应用推荐训练目标</div>
               <div className="text-[12px] text-dim">
                 {presetNotice}
                 {selectedTopic ? `：当前已选「${selectedTopicInfo?.name || selectedTopic}」` : "。"}
-                {quickFocusLabel || quickFocus ? `，focus 为「${quickFocusLabel || quickFocus}」。` : ""}
+                {quickFocusLabel || quickFocus ? `，重点为「${quickFocusLabel || quickFocus}」。` : ""}
               </div>
             </div>
           )}
@@ -452,7 +439,7 @@ export default function Home() {
           <div className="flex justify-between items-center gap-3 mb-4 flex-wrap">
             <div>
               <div className="text-lg font-semibold text-left">选择或调整训练专题</div>
-              <div className="mt-1 text-[12px] text-dim">点击任意专题卡片完成选择，随后页面会定位到开始确认区。</div>
+              <div className="mt-1 text-[12px] text-dim">点击专题卡片即可选择。</div>
             </div>
             {primaryRecommendation?.topic && !selectedTopic && (
               <button
@@ -460,7 +447,7 @@ export default function Home() {
                   setSelectedTopic(primaryRecommendation.topic);
                   setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
                   setQuickFocusLabel(primaryRecommendation.focus_label || "");
-                  setPresetNotice("已按画像为你带入本轮训练目标");
+                  setPresetNotice("已应用推荐训练目标");
                   setTimeout(() => scrollToSummary(), 120);
                 }}
                 className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
@@ -493,7 +480,7 @@ export default function Home() {
                       if (primaryRecommendation?.topic === key) {
                         setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
                         setQuickFocusLabel(primaryRecommendation.focus_label || "");
-                        setPresetNotice("已按画像为你带入本轮训练目标");
+                        setPresetNotice("已应用推荐训练目标");
                       } else {
                         setQuickFocus("");
                         setQuickFocusLabel("");
@@ -519,8 +506,7 @@ export default function Home() {
       {/* Start summary + button */}
       {mode && (
         <div className="w-full max-w-[700px]" ref={summarySectionRef}>
-          <div className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-accent-light/80">Step 3</div>
-          <div className={`${panelTone("summary")} mb-4 rounded-xl px-4 py-3 transition-all ${summaryFlash ? "ring-2 ring-accent/30 shadow-[0_0_0_1px_rgba(245,158,11,0.15)]" : ""}`}>
+                    <div className={`${panelTone("summary")} mb-4 rounded-xl px-4 py-3 transition-all ${summaryFlash ? "ring-2 ring-accent/30 shadow-[0_0_0_1px_rgba(245,158,11,0.15)]" : ""}`}>
             <div className="text-[13px] font-semibold text-text mb-2">开始前确认</div>
             <div className="flex flex-wrap gap-2 mb-2">
               <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light">
@@ -533,7 +519,7 @@ export default function Home() {
               )}
               {(quickFocusLabel || quickFocus) && (
                 <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-orange/15 text-orange max-w-[260px] truncate" title={quickFocusLabel || quickFocus}>
-                  focus：{quickFocusLabel || quickFocus}
+                  重点：{quickFocusLabel || quickFocus}
                 </span>
               )}
               {currentStrategyLabel && mode === "topic_drill" && (
