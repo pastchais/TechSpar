@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { PageTitle, SectionTitle, SubtleButton } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
-import { getReview, getReferenceAnswer, followupReferenceAnswer, scoreInterviewAnswer, getTopics } from "../api/interview";
+import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
 
 function getScoreColor(score) {
@@ -260,7 +260,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
   );
 }
 
-function DrillReview({ sessionId, scores, overall, questions, answers, topic, topics, persistedReferenceAnswers = {}, persistedReferenceFollowups = {} }) {
+function DrillReview({ sessionId, scores, overall, questions, answers, topic, topics, persistedReferenceAnswers = {}, persistedReferenceFollowups = {}, persistedImprovedAnswers = {} }) {
   const answerMap = {};
   for (const a of (answers || [])) answerMap[a.question_id] = a.answer;
   const scoreMap = {};
@@ -277,6 +277,15 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
   const [followupOpen, setFollowupOpen] = useState({});
   const [followupInput, setFollowupInput] = useState({});
   const [followupLoading, setFollowupLoading] = useState({});
+  const [improvedLoading, setImprovedLoading] = useState({});
+  const [improvedAnswers, setImprovedAnswers] = useState(() => {
+    const seeded = {};
+    Object.entries(persistedImprovedAnswers || {}).forEach(([key, value]) => {
+      const qid = value?.question_id;
+      if (qid != null) seeded[qid] = value;
+    });
+    return seeded;
+  });
   const [followupHistory, setFollowupHistory] = useState(() => {
     const seeded = {};
     Object.entries(persistedReferenceFollowups || {}).forEach(([key, items]) => {
@@ -342,6 +351,38 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
       }));
     }
     setFollowupLoading((p) => ({ ...p, [qId]: false }));
+  };
+
+  const handleImprovedAnswer = async (qId, questionText) => {
+    const referenceAnswer = refAnswers[qId]?.reference_answer || "";
+    const originalAnswer = answerMap[qId] || "";
+    if (!referenceAnswer) return;
+    setImprovedLoading((p) => ({ ...p, [qId]: true }));
+    try {
+      const data = await getImprovedAnswer(sessionId, topic, questionText, originalAnswer, qId, referenceAnswer, false);
+      setImprovedAnswers((p) => ({
+        ...p,
+        [qId]: {
+          improved_answer: data.improved_answer,
+          generated_at: data.generated_at,
+          cached: data.cached,
+          question_key: data.question_key,
+          model: data.model,
+        },
+      }));
+    } catch (e) {
+      setImprovedAnswers((p) => ({
+        ...p,
+        [qId]: {
+          improved_answer: "生成失败: " + e.message,
+          generated_at: null,
+          cached: false,
+          question_key: null,
+          model: null,
+        },
+      }));
+    }
+    setImprovedLoading((p) => ({ ...p, [qId]: false }));
   };
 
   const avgScore = overall?.avg_score || "-";
@@ -666,7 +707,28 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
                       >
                         <BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}
                       </button>
+                      <button
+                        className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50"
+                        onClick={() => handleImprovedAnswer(q.id, q.question)}
+                        disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}
+                      >
+                        <BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}
+                      </button>
                     </div>
+
+                    {improvedAnswers[q.id]?.improved_answer && (
+                      <div className="mt-3 rounded-lg border border-green/20 bg-green/5 px-3 py-3">
+                        <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
+                          <span>我的改进版答案</span>
+                          {improvedAnswers[q.id]?.generated_at && (
+                            <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
+                          )}
+                        </div>
+                        <div className="md-content rounded-lg bg-card px-3.5 py-3">
+                          <ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
 
                     {followupOpen[q.id] && (
                       <div className="mt-3 rounded-lg border border-border bg-hover px-3 py-3">
@@ -771,6 +833,7 @@ export default function Review() {
   const [autoScore, setAutoScore] = useState(stateData.auto_score || null);
   const [referenceAnswers, setReferenceAnswers] = useState(stateData.reference_answers || {});
   const [referenceFollowups, setReferenceFollowups] = useState(stateData.reference_followups || {});
+  const [improvedAnswers, setImprovedAnswers] = useState(stateData.improved_answers || {});
   const [showTranscript, setShowTranscript] = useState(false);
   const [loading, setLoading] = useState(!review && !scores);
 
@@ -807,6 +870,7 @@ export default function Review() {
           }
           if (data.reference_answers) setReferenceAnswers(data.reference_answers);
           if (data.reference_followups) setReferenceFollowups(data.reference_followups);
+          if (data.improved_answers) setImprovedAnswers(data.improved_answers);
           if (data.auto_score && Object.keys(data.auto_score).length) {
             setAutoScore(data.auto_score);
           } else if (data.review) {
@@ -842,7 +906,7 @@ export default function Review() {
       {isRecording && !isRecordingDual ? (
         <SoloRecordingReview topicsCovered={topicsCovered} overall={overall} />
       ) : showDrill ? (
-        <DrillReview sessionId={sessionId} scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} persistedReferenceAnswers={referenceAnswers} persistedReferenceFollowups={referenceFollowups} />
+        <DrillReview sessionId={sessionId} scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} persistedReferenceAnswers={referenceAnswers} persistedReferenceFollowups={referenceFollowups} persistedImprovedAnswers={improvedAnswers} />
       ) : (
         <>
           <DimensionScores

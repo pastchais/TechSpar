@@ -69,6 +69,7 @@ def _get_conn() -> sqlite3.Connection:
             auto_score TEXT DEFAULT '{}',
             reference_answers TEXT DEFAULT '{}',
             reference_followups TEXT DEFAULT '{}',
+            improved_answers TEXT DEFAULT '{}',
             review TEXT,
             user_id TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -76,7 +77,7 @@ def _get_conn() -> sqlite3.Connection:
         )
     """)
     # Migrate: add columns if missing (existing DBs)
-    for col, default in [("questions", "'[]'"), ("overall", "'{}'"), ("auto_score", "'{}'"), ("reference_answers", "'{}'"), ("reference_followups", "'{}'"), ("user_id", "NULL")]:
+    for col, default in [("questions", "'[]'"), ("overall", "'{}'"), ("auto_score", "'{}'"), ("reference_answers", "'{}'"), ("reference_followups", "'{}'"), ("improved_answers", "'{}'"), ("user_id", "NULL")]:
         try:
             conn.execute(f"SELECT {col} FROM sessions LIMIT 1")
         except sqlite3.OperationalError:
@@ -212,6 +213,25 @@ def append_reference_followup(session_id: str, question_key: str, item: dict, *,
     conn.close()
 
 
+def upsert_improved_answer(session_id: str, question_key: str, payload: dict, *, user_id: str):
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT improved_answers FROM sessions WHERE session_id = ? AND user_id = ?",
+        (session_id, user_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return
+    current = json.loads(row["improved_answers"] or "{}")
+    current[question_key] = payload
+    conn.execute(
+        "UPDATE sessions SET improved_answers = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ? AND user_id = ?",
+        (json.dumps(current, ensure_ascii=False), session_id, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_session(session_id: str, *, user_id: str) -> dict | None:
     conn = _get_conn()
     row = conn.execute(
@@ -230,6 +250,7 @@ def get_session(session_id: str, *, user_id: str) -> dict | None:
     result["auto_score"] = json.loads(result.get("auto_score", "{}") or "{}")
     result["reference_answers"] = json.loads(result.get("reference_answers", "{}") or "{}")
     result["reference_followups"] = json.loads(result.get("reference_followups", "{}") or "{}")
+    result["improved_answers"] = json.loads(result.get("improved_answers", "{}") or "{}")
     return result
 
 

@@ -170,6 +170,24 @@ export async function followupReferenceAnswer(sessionId, topic, question, follow
   return res.json();
 }
 
+export async function getImprovedAnswer(sessionId, topic, question, originalAnswer = "", questionId = null, referenceAnswer = "", forceRegenerate = false) {
+  const res = await authFetch(`${API_BASE}/interview/reference-answer/improved`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: sessionId,
+      topic,
+      question,
+      original_answer: originalAnswer,
+      question_id: questionId,
+      reference_answer: referenceAnswer,
+      force_regenerate: forceRegenerate,
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function scoreInterviewAnswer(payload) {
   const res = await authFetch(`${API_BASE}/interview/score`, {
     method: "POST",

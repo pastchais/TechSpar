@@ -27,7 +27,7 @@ from backend.storage.sessions import (
     create_session, append_message, save_review, save_drill_answers,
     get_session, list_sessions, list_sessions_by_topic,
     delete_session, list_distinct_topics, upsert_reference_answer,
-    append_reference_followup,
+    append_reference_followup, upsert_improved_answer,
 )
 from backend.graph import build_graph
 from backend.auth import (
@@ -1781,6 +1781,83 @@ async def followup_reference_answer(body: dict, user_id: str = Depends(get_curre
         "question_key": key,
         "reference_generated_at": stored.get("generated_at"),
         "history": (session.get("reference_followups") or {}).get(key, []) + [item],
+    }
+
+
+@router.post("/interview/reference-answer/improved")
+async def generate_improved_answer(body: dict, user_id: str = Depends(get_current_user)):
+    """Generate and persist an improved candidate-style answer from original answer + reference answer + followup thread."""
+    session_id = (body.get("session_id") or "").strip()
+    topic = (body.get("topic") or "").strip()
+    question = (body.get("question") or "").strip()
+    original_answer = (body.get("original_answer") or "").strip()
+    question_id = body.get("question_id")
+    force_regenerate = bool(body.get("force_regenerate"))
+    if not session_id or not topic or not question:
+        raise HTTPException(400, "session_id, topic and question are required")
+
+    session = get_session(session_id, user_id=user_id)
+    if not session:
+        raise HTTPException(404, "Session not found.")
+
+    key = _reference_answer_key(question_id=question_id, question=question)
+    existing = (session.get("improved_answers") or {}).get(key)
+    if existing and not force_regenerate:
+        return {
+            "improved_answer": existing.get("improved_answer", ""),
+            "cached": True,
+            "generated_at": existing.get("generated_at"),
+            "question_key": key,
+            "model": existing.get("model"),
+        }
+
+    stored = (session.get("reference_answers") or {}).get(key) or {}
+    reference_answer = (body.get("reference_answer") or "").strip() or stored.get("reference_answer", "")
+    if not reference_answer:
+        raise HTTPException(400, "reference answer not found, generate it first")
+
+    from backend.indexer import retrieve_topic_context
+    from backend.llm_provider import get_langchain_llm
+    from backend.prompts.interviewer import IMPROVED_ANSWER_PROMPT
+    from langchain_core.messages import HumanMessage
+
+    topics = load_topics(user_id)
+    topic_name = topics.get(topic, {}).get("name", topic)
+    refs = stored.get("knowledge_refs") or retrieve_topic_context(topic, question, user_id, top_k=3)
+    knowledge_context = "\n\n".join(refs) if refs else "（暂无参考材料）"
+    history = (session.get("reference_followups") or {}).get(key, [])
+    history_text = "\n\n".join([
+        f"用户追问：{item.get('followup', '')}\nAI回答：{item.get('answer', '')}" for item in history
+    ]) or "（暂无后续辅导对话）"
+
+    prompt = IMPROVED_ANSWER_PROMPT.format(
+        topic_name=topic_name,
+        question=question,
+        original_answer=original_answer or "（候选人原始回答为空）",
+        reference_answer=reference_answer,
+        followup_history=history_text,
+        knowledge_context=knowledge_context,
+    )
+
+    llm = get_langchain_llm()
+    resp = llm.invoke([HumanMessage(content=prompt)])
+    improved_answer = resp.content.strip()
+    payload = {
+        "question": question,
+        "question_id": question_id,
+        "original_answer": original_answer,
+        "improved_answer": improved_answer,
+        "generated_at": datetime.now().isoformat(),
+        "model": settings.model,
+        "version": 1,
+    }
+    upsert_improved_answer(session_id, key, payload, user_id=user_id)
+    return {
+        "improved_answer": improved_answer,
+        "cached": False,
+        "generated_at": payload["generated_at"],
+        "question_key": key,
+        "model": settings.model,
     }
 
 
