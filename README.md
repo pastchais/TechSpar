@@ -122,11 +122,34 @@ ALLOW_REGISTRATION=false
 
 ### 2a. Docker 部署（推荐）
 
+优先使用仓库内的包装脚本，兼容 `docker compose` 插件缺失、以及部分 Debian 环境下 `docker-compose` 被 Python 包污染的问题：
+
 ```bash
-docker compose up --build
+./scripts/compose.sh -f docker-compose.prod.yml up --build
+```
+
+常用部署命令：
+
+```bash
+# 仅重建前端
+./scripts/deploy.sh frontend
+
+# 仅重建后端
+./scripts/deploy.sh backend
+
+# 整体重建
+./scripts/deploy.sh all
+
+# 查看状态
+./scripts/deploy.sh status
 ```
 
 访问 `http://localhost`。
+
+生产环境默认使用：
+- `./data` 保存后端数据
+- `./.runtime/caddy_data` 保存 Caddy 证书与状态
+- `./.runtime/caddy_config` 保存 Caddy 配置状态
 
 ### 2b. 手动启动
 
