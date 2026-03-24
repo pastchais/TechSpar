@@ -115,8 +115,8 @@ function DimensionScores({ dimensionScores, avgScore }) {
         const score = dimensionScores[key];
         const color = score >= 8 ? "var(--green)" : score >= 6 ? "var(--accent-light)" : score >= 4 ? "#e2b93b" : "var(--red)";
         return (
-          <div key={key} className="flex items-center gap-3 mb-2.5">
-            <div className="w-[80px] md:w-[100px] text-[13px] text-dim text-right shrink-0">{label}</div>
+          <div key={key} className="flex items-center gap-2.5 mb-2.5">
+            <div className="w-[64px] md:w-[100px] text-[12px] md:text-[13px] text-dim text-right shrink-0 leading-4">{label}</div>
             <div className="flex-1 h-2 rounded bg-border overflow-hidden">
               <div className="h-full rounded transition-[width] duration-500 ease-in-out" style={{ width: `${score * 10}%`, background: color }} />
             </div>
@@ -142,8 +142,8 @@ function AutoScoreCard({ autoScore }) {
         const percent = (score / 5) * 100;
         const color = score >= 4 ? "var(--green)" : score >= 3 ? "var(--accent-light)" : "var(--red)";
         return (
-          <div key={key} className="flex items-center gap-3 mb-2.5">
-            <div className="w-[88px] md:w-[110px] text-[13px] text-dim text-right shrink-0">{label}</div>
+          <div key={key} className="flex items-center gap-2.5 mb-2.5">
+            <div className="w-[72px] md:w-[110px] text-[12px] md:text-[13px] text-dim text-right shrink-0 leading-4">{label}</div>
             <div className="flex-1 h-2 rounded bg-border overflow-hidden">
               <div className="h-full rounded transition-[width] duration-500 ease-in-out" style={{ width: `${percent}%`, background: color }} />
             </div>
@@ -671,8 +671,8 @@ export default function Review() {
   return (
     <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-3xl mx-auto w-full">
       <div className="mb-8">
-        <div className="text-2xl md:text-[28px] font-display font-bold mb-2">{isRecording ? "录音复盘" : showDrill ? "训练复盘" : "面试复盘"}</div>
-        <div className="text-sm text-dim">Session: {sessionId}</div>
+        <div className="text-[26px] leading-tight md:text-[28px] font-display font-bold mb-2">{isRecording ? "录音复盘" : showDrill ? "训练复盘" : "面试复盘"}</div>
+        <div className="text-[13px] leading-6 text-dim break-all">Session: {sessionId}</div>
       </div>
 
       <AutoScoreCard autoScore={autoScore} />

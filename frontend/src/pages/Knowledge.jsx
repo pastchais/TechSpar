@@ -348,7 +348,7 @@ export default function Knowledge() {
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-30 w-[200px] border-r border-border bg-bg p-4 flex flex-col transition-transform duration-200
+        fixed inset-y-0 left-0 z-30 w-[220px] border-r border-border bg-bg p-4 flex flex-col transition-transform duration-200
         md:static md:translate-x-0 md:shrink-0
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
@@ -369,7 +369,7 @@ export default function Knowledge() {
                 onClick={() => selectTopic(key)}
               >
                 <span className="text-dim">{getTopicIcon(topics[key]?.icon, 16)}</span>
-                <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{topics[key]?.name || key}</span>
+                <span className="flex-1 min-w-0 break-words leading-5">{topics[key]?.name || key}</span>
               </button>
               <button
                 className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent border-none text-dim cursor-pointer text-sm px-1.5 py-1 rounded opacity-0 group-hover:opacity-100 transition-all hover:text-red hover:bg-red/10"
@@ -424,14 +424,14 @@ export default function Knowledge() {
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Tabs */}
-        <div className="flex border-b border-border px-4 md:px-6 bg-card items-center justify-between gap-3 flex-wrap">
-          <div className="flex">
+        <div className="flex border-b border-border px-4 md:px-6 bg-card items-start md:items-center justify-between gap-3 flex-wrap">
+          <div className="flex flex-wrap">
             <button
-              className={`px-4 py-3 md:px-5 text-sm border-b-2 transition-all cursor-pointer ${tab === "core" ? "text-text border-b-accent" : "text-dim border-b-transparent bg-transparent"}`}
+              className={`px-4 py-3 md:px-5 text-sm border-b-2 transition-all cursor-pointer whitespace-nowrap ${tab === "core" ? "text-text border-b-accent" : "text-dim border-b-transparent bg-transparent"}`}
               onClick={() => setTab("core")}
             >核心知识库</button>
             <button
-              className={`px-4 py-3 md:px-5 text-sm border-b-2 transition-all cursor-pointer ${tab === "high_freq" ? "text-text border-b-accent" : "text-dim border-b-transparent bg-transparent"}`}
+              className={`px-4 py-3 md:px-5 text-sm border-b-2 transition-all cursor-pointer whitespace-nowrap ${tab === "high_freq" ? "text-text border-b-accent" : "text-dim border-b-transparent bg-transparent"}`}
               onClick={() => setTab("high_freq")}
             >高频题库</button>
           </div>
