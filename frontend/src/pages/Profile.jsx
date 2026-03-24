@@ -548,10 +548,6 @@ export default function Profile() {
       <div className="text-sm text-dim mb-4">
         {stats.total_answers || 0} 次回答分析{stats.total_sessions ? ` | ${stats.total_sessions} 次完整面试` : ""} | 上次更新: {profile.updated_at?.slice(0, 16)}
       </div>
-      <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-4 text-sm text-dim leading-[1.8]">
-        这里优先展示“下一步该练什么”。其余弱点默认保持紧凑列表，详情改为浮层查看，避免为了看一条分析把整页越拉越长。
-      </div>
-
       <div className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-border bg-card px-3 py-3">
         <button onClick={() => scrollToSection(coachRef)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer">现在该练什么</button>
         <button onClick={() => scrollToSection(insightsRef)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-hover text-dim border-none cursor-pointer">画像重点</button>

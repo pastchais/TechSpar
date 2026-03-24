@@ -189,15 +189,7 @@ export default function Home() {
           <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" /> Step 1
         </div>
         <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-4 md:px-5">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <div className="text-[18px] font-semibold text-text">选择本轮训练模式</div>
-              <div className="mt-1 text-[13px] text-dim leading-[1.7]">
-                先点选一种模式，系统再带你进入下一步配置。
-              </div>
-            </div>
-            {!mode && <span className="text-[12px] text-accent font-medium animate-pulse-dot">请先点击下方卡片</span>}
-          </div>
+          <div className="text-[18px] font-semibold text-text">选择本轮训练模式</div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
