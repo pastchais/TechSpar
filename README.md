@@ -146,10 +146,16 @@ ALLOW_REGISTRATION=false
 # 查看日志
 ./scripts/deploy.sh logs frontend
 
+# 查看最近 200 行日志
+./scripts/deploy.sh logs all 200
+
+# 拉取最新代码并重建前端
+./scripts/deploy.sh update frontend
+
 # 查看状态
 ./scripts/deploy.sh status
 
-# 拉取最新代码
+# 仅拉取最新代码
 ./scripts/deploy.sh pull
 ```
 
