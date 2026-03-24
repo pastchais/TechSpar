@@ -119,6 +119,297 @@ def _build_practice_comparison(baseline: dict | None, overall: dict | None) -> d
         "baseline": baseline,
     }
 
+
+def _analyze_practice_trend(items: list[dict] | None) -> dict | None:
+    scored = [x for x in (items or []) if isinstance(x.get("avg_score"), (int, float))]
+    if len(scored) < 2:
+        return None
+
+    recent = scored[-5:]
+    first = float(recent[0]["avg_score"])
+    last = float(recent[-1]["avg_score"])
+    delta = round(last - first, 1)
+    up_steps = 0
+    down_steps = 0
+    flat_steps = 0
+    for i in range(1, len(recent)):
+        diff = float(recent[i]["avg_score"]) - float(recent[i - 1]["avg_score"])
+        if diff >= 0.6:
+            up_steps += 1
+        elif diff <= -0.6:
+            down_steps += 1
+        else:
+            flat_steps += 1
+
+    if delta >= 1.2 and up_steps >= max(1, len(recent) - 2):
+        return {
+            "label": "持续上升",
+            "summary": f"最近 {len(recent)} 次同目标复练整体呈上升趋势（+{delta} 分）。",
+            "advice": "可以减少同类重复题，转向更深一层的 why / 边界 / 追问。",
+        }
+    if delta <= -1.2 and down_steps >= max(1, len(recent) - 2):
+        return {
+            "label": "出现回退",
+            "summary": f"最近 {len(recent)} 次同目标复练整体在回落（{delta} 分）。",
+            "advice": "建议回到更基础的口语化表达和关键点复述，先稳住再加压。",
+        }
+    if up_steps > 0 and down_steps > 0:
+        return {
+            "label": "波动明显",
+            "summary": f"最近 {len(recent)} 次分数有起伏（净变化 {delta:+.1f} 分）。",
+            "advice": "说明理解可能还不稳定，建议固定同一种答题结构，再做 1-2 轮验收。",
+        }
+    return {
+        "label": "进入平台期",
+        "summary": f"最近 {len(recent)} 次表现基本持平（净变化 {delta:+.1f} 分）。",
+        "advice": "别再刷同一层问题了，应该改成更刁钻的追问或项目化表达训练。",
+    }
+
+
+def _build_training_label_stats(questions: list[dict] | None, scores: list[dict] | None, targeting: dict | None = None) -> dict | None:
+    questions = questions or []
+    scores = scores or []
+    targeting = targeting or {}
+    if not questions:
+        return None
+
+    score_map = {s.get("question_id"): s for s in scores if s.get("question_id") is not None}
+    buckets: dict[str, dict] = {}
+    total_answered = 0
+    total_improved = 0
+    total_focus_hits = 0
+
+    for q in questions:
+        qid = q.get("id")
+        label = (q.get("training_label") or "稳定性验收").strip() or "稳定性验收"
+        bucket = buckets.setdefault(label, {
+            "label": label,
+            "count": 0,
+            "answered": 0,
+            "avg_score": None,
+            "score_values": [],
+            "improved_count": 0,
+            "focus_hit_count": 0,
+            "high_scores": 0,
+            "low_scores": 0,
+            "sample_questions": [],
+        })
+        bucket["count"] += 1
+        if len(bucket["sample_questions"]) < 2 and q.get("question"):
+            bucket["sample_questions"].append(q.get("question"))
+        s = score_map.get(qid) or {}
+        score = s.get("score")
+        if isinstance(score, (int, float)):
+            total_answered += 1
+            bucket["answered"] += 1
+            bucket["score_values"].append(float(score))
+            if float(score) >= 7:
+                bucket["high_scores"] += 1
+            if float(score) < 6:
+                bucket["low_scores"] += 1
+        if s.get("improved"):
+            bucket["improved_count"] += 1
+            total_improved += 1
+        if s.get("focus_hit"):
+            bucket["focus_hit_count"] += 1
+            total_focus_hits += 1
+
+    items = []
+    best_label = None
+    weakest_label = None
+    best_score = None
+    weakest_score = None
+    for label, bucket in buckets.items():
+        vals = bucket.pop("score_values", [])
+        avg_score = round(sum(vals) / len(vals), 1) if vals else None
+        bucket["avg_score"] = avg_score
+        bucket["improved_rate"] = round(bucket["improved_count"] / max(bucket["answered"], 1), 2) if bucket["answered"] else 0.0
+        bucket["focus_hit_rate"] = round(bucket["focus_hit_count"] / max(bucket["count"], 1), 2)
+        if avg_score is not None and bucket["answered"]:
+            if best_score is None or avg_score > best_score:
+                best_score = avg_score
+                best_label = label
+            if weakest_score is None or avg_score < weakest_score:
+                weakest_score = avg_score
+                weakest_label = label
+        items.append(bucket)
+
+    order = {"基础稳固": 0, "稳定性验收": 1, "迁移验收": 2, "平台突破": 3, "边界追问": 4}
+    items.sort(key=lambda x: (order.get(x.get("label"), 99), -(x.get("answered") or 0), -(x.get("avg_score") or -99)))
+
+    summary_parts = []
+    if best_label and best_score is not None:
+        summary_parts.append(f"本轮表现最好的是「{best_label}」({best_score}/10)")
+    if weakest_label and weakest_score is not None and weakest_label != best_label:
+        summary_parts.append(f"最需要继续打磨的是「{weakest_label}」({weakest_score}/10)")
+    if total_focus_hits:
+        summary_parts.append(f"共有 {total_focus_hits} 道题命中本轮 focus")
+    if total_improved:
+        summary_parts.append(f"其中 {total_improved} 道题出现回升")
+
+    return {
+        "items": items,
+        "best_label": best_label,
+        "best_avg_score": best_score,
+        "weakest_label": weakest_label,
+        "weakest_avg_score": weakest_score,
+        "summary": "；".join(summary_parts) if summary_parts else "本轮各训练标签的样本还较少。",
+        "answered": total_answered,
+        "focus_hit_total": total_focus_hits,
+        "improved_total": total_improved,
+    }
+
+
+def _build_strategy_meta_review(
+    training_meta: dict | None,
+    targeting: dict | None,
+    comparison: dict | None,
+    items: list[dict] | None = None,
+) -> dict | None:
+    training_meta = training_meta or {}
+    targeting = targeting or {}
+    comparison = comparison or {}
+    recent = (items or [])[-5:]
+    trend = _analyze_practice_trend(recent)
+
+    base_trend = targeting.get("focus_trend") or (comparison.get("baseline") or {}).get("focus_trend") or ""
+    delta = comparison.get("delta_score") if isinstance(comparison.get("delta_score"), (int, float)) else None
+    repair_rate = targeting.get("repair_rate") if isinstance(targeting.get("repair_rate"), (int, float)) else comparison.get("repair_rate")
+    focus_hit_rate = targeting.get("focus_hit_rate") if isinstance(targeting.get("focus_hit_rate"), (int, float)) else comparison.get("focus_hit_rate")
+    attempted = int(targeting.get("attempted_questions") or len(recent) or 0)
+    front3_focus_hits = int(targeting.get("front3_focus_hits") or 0)
+    last_score = recent[-1].get("avg_score") if recent else None
+    first_score = recent[0].get("avg_score") if recent else None
+    score_values = [float(x.get("avg_score")) for x in recent if isinstance(x.get("avg_score"), (int, float))]
+    score_range = (max(score_values) - min(score_values)) if score_values else None
+
+    evidence: list[str] = []
+    if isinstance(delta, (int, float)):
+        evidence.append(f"相对原题基线 {delta:+.1f} 分")
+    if isinstance(focus_hit_rate, (int, float)):
+        evidence.append(f"focus 命中率 {int(float(focus_hit_rate) * 100)}%")
+    if isinstance(repair_rate, (int, float)):
+        evidence.append(f"修复率 {int(float(repair_rate) * 100)}%")
+    label_stats = targeting.get("training_label_stats") if isinstance(targeting.get("training_label_stats"), dict) else None
+    if label_stats and label_stats.get("best_label") and isinstance(label_stats.get("best_avg_score"), (int, float)):
+        evidence.append(f"最佳训练标签：{label_stats.get('best_label')}（{label_stats.get('best_avg_score')}/10）")
+    if label_stats and label_stats.get("weakest_label") and isinstance(label_stats.get("weakest_avg_score"), (int, float)):
+        evidence.append(f"最弱训练标签：{label_stats.get('weakest_label')}（{label_stats.get('weakest_avg_score')}/10）")
+    if trend and trend.get("label"):
+        evidence.append(f"同目标轨迹：{trend.get('label')}")
+    if front3_focus_hits:
+        evidence.append(f"前 3 题命中 focus {front3_focus_hits} 次")
+
+    verdict = "部分有效"
+    verdict_level = "partial"
+    summary = training_meta.get("summary") or "本轮训练已结束，但还需要根据趋势判断策略是否真正奏效。"
+    next_action = "再做 1 轮同目标短打复练，然后再决定是否切换策略。"
+    recommended_action = "continue"
+
+    def is_effective() -> bool:
+        if base_trend == "进入平台期":
+            return (trend and trend.get("label") == "持续上升") or ((delta if delta is not None else -99) >= 1 and (repair_rate or 0) >= 0.5)
+        if base_trend == "出现回退":
+            return (trend and trend.get("label") != "出现回退") and ((delta or 0) >= 0 or (repair_rate or 0) >= 0.5)
+        if base_trend == "持续上升":
+            return (focus_hit_rate or 0) >= 0.6 and (((last_score or 0) >= 7.5) or (trend and trend.get("label") == "持续上升"))
+        if base_trend == "波动明显":
+            return (trend and trend.get("label") != "波动明显") and (((score_range if score_range is not None else 99) <= 1.5) or (repair_rate or 0) >= 0.5)
+        return ((delta or 0) >= 1 and (repair_rate or 0) >= 0.5) or (trend and trend.get("label") == "持续上升")
+
+    def is_ineffective() -> bool:
+        if base_trend == "进入平台期":
+            return (trend and trend.get("label") in {"进入平台期", "出现回退"}) and ((delta if delta is not None else -99) < 0.5)
+        if base_trend == "出现回退":
+            return (trend and trend.get("label") == "出现回退") and ((delta if delta is not None else 99) < 0)
+        if base_trend == "持续上升":
+            return (focus_hit_rate or 0) < 0.5 or ((last_score or 0) < 7)
+        if base_trend == "波动明显":
+            return (trend and trend.get("label") == "波动明显") and ((score_range or 0) > 1.8)
+        return ((delta or 0) < 0) and ((repair_rate or 0) < 0.4)
+
+    if is_effective():
+        verdict = "策略有效"
+        verdict_level = "effective"
+        if base_trend == "进入平台期":
+            summary = "这次平台突破训练不只是命中了目标，而且已经出现了脱离平台的迹象。说明继续刷同层题的收益在下降，策略升级是合理的。"
+            next_action = "减少同层重复题，转向 why / 边界条件 / 反例 / 场景迁移题。"
+            recommended_action = "upgrade"
+        elif base_trend == "出现回退":
+            summary = "这次稳固训练起效了，回退趋势被压住，说明先降压、先稳表达的策略是对的。"
+            next_action = "再做少量验收题确认稳定后，恢复正常强度训练。"
+            recommended_action = "stabilize"
+        elif base_trend == "持续上升":
+            summary = "这轮迁移验收说明提升并不是只会答原题，而是开始具备跨场景复用能力。"
+            next_action = "可以把训练重点切到更复杂场景或新的薄弱点。"
+            recommended_action = "upgrade"
+        elif base_trend == "波动明显":
+            summary = "这轮稳定性验收说明表现开始收敛，不再只是偶尔答对，策略方向正确。"
+            next_action = "再做 1 轮不同表述但同结构的问题，确认已经真正稳定。"
+            recommended_action = "stabilize"
+        else:
+            summary = "这轮训练对目标薄弱点起到了实质作用，不只是统计上命中，而是开始带来能力变化。"
+            next_action = "保持有效策略，但把下一轮难度往上提一点。"
+            recommended_action = "upgrade"
+    elif is_ineffective():
+        verdict = "策略未奏效"
+        verdict_level = "ineffective"
+        if base_trend == "进入平台期":
+            summary = "这轮平台突破训练虽然有针对性，但还没有真正把你从平台里拉出来。说明只是换了题皮，认知层级还没变。"
+            next_action = "别继续刷同类题了，改成更小颗粒度拆点，或直接切到 why / 反例 / 对比题。"
+            recommended_action = "switch"
+        elif base_trend == "出现回退":
+            summary = "这轮稳固训练还没把回退止住，说明当前难度或回答结构仍然偏高。"
+            next_action = "先降难度，强制固定答题骨架，再做一轮基础稳固。"
+            recommended_action = "stabilize"
+        elif base_trend == "持续上升":
+            summary = "这轮迁移验收暴露出提升还没有真正内化，原本的上升更像局部熟练而不是稳定能力。"
+            next_action = "先回到修复训练，把关键点与表达主线重新压实。"
+            recommended_action = "switch"
+        elif base_trend == "波动明显":
+            summary = "这轮稳定性验收没有压住波动，说明你目前还处于会答但不稳定的阶段。"
+            next_action = "继续固定同一答题结构，减少自由发挥，再做短轮验收。"
+            recommended_action = "stabilize"
+        else:
+            summary = "这轮训练没有形成足够明显的能力改善，继续照原策略追加投入的性价比不高。"
+            next_action = "应当换策略，而不是继续同配方重复。"
+            recommended_action = "switch"
+    else:
+        if base_trend == "进入平台期":
+            summary = "这轮平台突破训练有一点松动迹象，但还不足以证明平台已经被打破。"
+            next_action = "可以再做 1 轮同目标复练，但题型要更尖锐，别重复当前套路。"
+            recommended_action = "continue"
+        elif base_trend == "持续上升":
+            summary = "这轮迁移验收说明已有一定迁移能力，但还不够稳，暂时不能判定完全内化。"
+            next_action = "再补 1 轮跨场景验收，确认不是偶然发挥。"
+            recommended_action = "continue"
+        elif base_trend == "波动明显":
+            summary = "这轮验收有改善，但波动还没完全收敛，说明策略部分有效。"
+            next_action = "继续 1 轮同结构变体题，优先看稳定性而不是峰值分数。"
+            recommended_action = "continue"
+        else:
+            summary = "这轮训练对目标产生了一些作用，但证据还不够强，暂时更适合视为部分有效。"
+            next_action = "保留策略方向，再补一轮更短、更聚焦的验证。"
+            recommended_action = "continue"
+
+    if not (training_meta or comparison or targeting or attempted):
+        return None
+
+    return {
+        "verdict": verdict,
+        "verdict_level": verdict_level,
+        "summary": summary,
+        "next_action": next_action,
+        "recommended_action": recommended_action,
+        "evidence": evidence,
+        "base_trend": base_trend,
+        "trend_label": trend.get("label") if trend else None,
+        "attempted_questions": attempted,
+        "first_score": first_score,
+        "last_score": last_score,
+        "delta_score": delta,
+    }
+
 app = FastAPI(title="TechSpar", version="0.2.0")
 
 
@@ -350,7 +641,19 @@ def _compute_drill_targeting_stats(topic: str, questions: list[dict], scores: li
     }
 
 
-def _track_weak_point_repairs(topic: str, targeting_stats: dict, user_id: str):
+def _strategy_mode_label(mode: str | None) -> str:
+    mode = (mode or "").strip()
+    mapping = {
+        "repair": "基础稳固",
+        "stabilize": "稳定性验收",
+        "advance": "迁移验收",
+        "platform_break": "平台突破",
+        "plateau_break": "平台突破",
+    }
+    return mapping.get(mode, mode or "训练策略")
+
+
+def _track_weak_point_repairs(topic: str, targeting_stats: dict, user_id: str, strategy_meta_review: dict | None = None):
     from backend.memory import _load_profile, _save_profile, _refresh_weak_point_aggregates
 
     profile = _load_profile(user_id)
@@ -361,6 +664,13 @@ def _track_weak_point_repairs(topic: str, targeting_stats: dict, user_id: str):
     focus_keyword = targeting_stats.get("focus_keyword")
     focus_hit_rate = targeting_stats.get("focus_hit_rate", 0.0)
     front3_focus_hits = targeting_stats.get("front3_focus_hits", 0)
+    strategy_meta_review = strategy_meta_review or {}
+    strategy_mode = (strategy_meta_review.get("recommended_action") or "").strip() or None
+    strategy_label = _strategy_mode_label(strategy_mode)
+    strategy_verdict = strategy_meta_review.get("verdict")
+    strategy_verdict_level = strategy_meta_review.get("verdict_level")
+    strategy_trend_label = strategy_meta_review.get("trend_label")
+    strategy_delta = strategy_meta_review.get("delta_score") if isinstance(strategy_meta_review.get("delta_score"), (int, float)) else None
 
     for item in matched_items:
         point_text = (item.get("weak_point") or "").lower()
@@ -391,6 +701,20 @@ def _track_weak_point_repairs(topic: str, targeting_stats: dict, user_id: str):
             wp["repair_success_rate"] = round(
                 (wp.get("repair_successes", 0) or 0) / max(wp.get("repair_attempts", 1), 1), 2
             )
+            if strategy_mode and strategy_verdict_level:
+                strategy_history = list(wp.get("strategy_history") or [])[-11:]
+                strategy_history.append({
+                    "strategy_mode": strategy_mode,
+                    "strategy_label": strategy_label,
+                    "verdict": strategy_verdict,
+                    "verdict_level": strategy_verdict_level,
+                    "trend_label": strategy_trend_label,
+                    "delta_score": strategy_delta,
+                    "repair_rate": targeting_stats.get("repair_rate", 0.0),
+                    "focus_label": focus_label,
+                    "at": datetime.now().isoformat(),
+                })
+                wp["strategy_history"] = strategy_history
             changed = True
             break
 
@@ -1407,6 +1731,15 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
             focus_keyword=entry.get("focus_keyword"),
             focus_label=entry.get("focus_label"),
         )
+        for s in scores:
+            q = next((item for item in questions if item.get("id") == s.get("question_id")), None)
+            if q:
+                s.setdefault("training_label", q.get("training_label"))
+                s.setdefault("training_intent", q.get("training_intent"))
+                s.setdefault("focus_area", q.get("focus_area"))
+        training_label_stats = _build_training_label_stats(questions, scores, overall.get("targeting_stats"))
+        if training_label_stats:
+            overall["training_label_stats"] = training_label_stats
         if entry.get("focus_trend"):
             overall["targeting_stats"]["focus_trend"] = entry.get("focus_trend")
         if entry.get("trend_training_meta"):
@@ -1414,6 +1747,26 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
         practice_comparison = _build_practice_comparison(entry.get("practice_baseline"), overall)
         if practice_comparison:
             overall["practice_comparison"] = practice_comparison
+
+        practice_trend_items = []
+        if practice_comparison and practice_comparison.get("focus_label") and topic:
+            try:
+                history_items = list_sessions(user_id=user_id, limit=50, offset=0, mode="topic_drill", topic=topic).get("items", [])
+                practice_trend_items = [x for x in history_items if x.get("focus_label") == practice_comparison.get("focus_label")]
+                practice_trend_items.reverse()
+            except Exception:
+                practice_trend_items = []
+        targeting_for_review = dict(overall.get("targeting_stats") or {})
+        if overall.get("training_label_stats"):
+            targeting_for_review["training_label_stats"] = overall.get("training_label_stats")
+        strategy_meta_review = _build_strategy_meta_review(
+            overall.get("trend_training_meta"),
+            targeting_for_review,
+            overall.get("practice_comparison"),
+            practice_trend_items,
+        )
+        if strategy_meta_review:
+            overall["strategy_meta_review"] = strategy_meta_review
 
         # Generate review text from eval
         review = _format_drill_review(questions, answers, scores, overall)
@@ -1429,7 +1782,10 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
 
         # Update profile (1 LLM call via Mem0 pipeline — uses overall data)
         await _update_drill_profile(topic, overall, scores, len(questions), user_id)
-        _track_weak_point_repairs(topic, overall.get("targeting_stats") or {}, user_id)
+        targeting_stats = dict(overall.get("targeting_stats") or {})
+        if overall.get("practice_comparison"):
+            targeting_stats["practice_comparison"] = overall.get("practice_comparison")
+        _track_weak_point_repairs(topic, targeting_stats, user_id, overall.get("strategy_meta_review"))
 
         # Update spaced repetition state for evaluated weak points
         from backend.spaced_repetition import update_weak_point_sr

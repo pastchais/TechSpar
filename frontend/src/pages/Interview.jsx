@@ -230,7 +230,31 @@ export default function Interview() {
               <div className="w-full max-w-[720px] bg-card border border-border rounded-2xl px-5 py-6 md:px-8 md:py-7 animate-fade-in">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-3 py-1 rounded-md">Q{currentQ.id}</span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {currentQ.training_label && (
+                      <span className="text-xs px-2 py-0.5 rounded" style={{
+                        background:
+                          currentQ.training_label === "基础稳固"
+                            ? "rgba(239,68,68,.12)"
+                            : currentQ.training_label === "迁移验收"
+                              ? "rgba(34,197,94,.12)"
+                              : currentQ.training_label === "平台突破"
+                                ? "rgba(168,85,247,.12)"
+                                : currentQ.training_label === "边界追问"
+                                  ? "rgba(245,158,11,.12)"
+                                  : "rgba(91,141,239,.12)",
+                        color:
+                          currentQ.training_label === "基础稳固"
+                            ? "var(--red)"
+                            : currentQ.training_label === "迁移验收"
+                              ? "var(--green)"
+                              : currentQ.training_label === "平台突破"
+                                ? "#a855f7"
+                                : currentQ.training_label === "边界追问"
+                                  ? "#f59e0b"
+                                  : "var(--accent-light)",
+                      }} title={currentQ.training_intent || currentQ.training_label}>{currentQ.training_label}</span>
+                    )}
                     {currentQ.focus_area && (
                       <span className="text-xs text-dim bg-hover px-2 py-0.5 rounded">{currentQ.focus_area}</span>
                     )}
@@ -248,6 +272,9 @@ export default function Interview() {
                     <ReactMarkdown>{currentQ.question}</ReactMarkdown>
                   </div>
                 </div>
+                {currentQ.training_intent && (
+                  <div className="mt-3 text-[13px] text-dim leading-[1.7]">训练意图：{currentQ.training_intent}</div>
+                )}
               </div>
 
               {/* Input area */}

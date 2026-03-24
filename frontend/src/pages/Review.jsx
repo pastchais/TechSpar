@@ -42,6 +42,15 @@ function strategyBadge(strategy) {
   return { label: "稳固", bg: "rgba(91,141,239,.12)", color: "var(--accent-light)" };
 }
 
+function trainingLabelBadge(label) {
+  const text = label || "稳定性验收";
+  if (text === "基础稳固") return { label: text, bg: "rgba(239,68,68,.12)", color: "var(--red)" };
+  if (text === "迁移验收") return { label: text, bg: "rgba(34,197,94,.12)", color: "var(--green)" };
+  if (text === "平台突破") return { label: text, bg: "rgba(168,85,247,.12)", color: "#a855f7" };
+  if (text === "边界追问") return { label: text, bg: "rgba(245,158,11,.12)", color: "#f59e0b" };
+  return { label: text, bg: "rgba(91,141,239,.12)", color: "var(--accent-light)" };
+}
+
 function strategyReason(item) {
   if (!item) return "";
   if (item.adaptive_strategy === "repair") {
@@ -324,6 +333,209 @@ function PracticeTrendCard({ focusLabel, items = [] }) {
             {item.focus_hit_rate != null ? ` · 命中 ${(item.focus_hit_rate * 100).toFixed(0)}%` : ""}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function buildStrategyMetaReview({ trainingMeta, targeting, comparison, items = [] }) {
+  const baseTrend = targeting?.focus_trend || comparison?.baseline?.focus_trend || "";
+  const recent = (items || []).slice(-5);
+  const trend = recent.length >= 2 ? analyzePracticeTrend(recent) : null;
+  const delta = typeof comparison?.delta_score === "number" ? comparison.delta_score : null;
+  const repairRate = typeof targeting?.repair_rate === "number" ? targeting.repair_rate : (typeof comparison?.repair_rate === "number" ? comparison.repair_rate : null);
+  const focusHitRate = typeof targeting?.focus_hit_rate === "number" ? targeting.focus_hit_rate : (typeof comparison?.focus_hit_rate === "number" ? comparison.focus_hit_rate : null);
+  const attempted = targeting?.attempted_questions || recent.length || 0;
+  const front3FocusHits = targeting?.front3_focus_hits || 0;
+  const lastScore = recent.length ? recent[recent.length - 1]?.avg_score : null;
+  const firstScore = recent.length ? recent[0]?.avg_score : null;
+  const scoreRange = recent.length
+    ? Math.max(...recent.map((item) => (typeof item.avg_score === "number" ? item.avg_score : 0))) - Math.min(...recent.map((item) => (typeof item.avg_score === "number" ? item.avg_score : 0)))
+    : null;
+
+  const evidence = [];
+  if (typeof delta === "number") evidence.push(`相对原题基线 ${delta >= 0 ? "+" : ""}${delta} 分`);
+  if (typeof focusHitRate === "number") evidence.push(`focus 命中率 ${(focusHitRate * 100).toFixed(0)}%`);
+  if (typeof repairRate === "number") evidence.push(`修复率 ${(repairRate * 100).toFixed(0)}%`);
+  if (trend?.label) evidence.push(`同目标轨迹：${trend.label}`);
+  if (front3FocusHits) evidence.push(`前 3 题命中 focus ${front3FocusHits} 次`);
+
+  let verdict = "部分有效";
+  let verdictClass = "bg-accent/10 text-accent-light";
+  let summary = trainingMeta?.summary || "本轮训练已结束，但还需要根据趋势判断策略是否真正奏效。";
+  let nextAction = "再做 1 轮同目标短打复练，然后再决定是否切换策略。";
+
+  const isEffective = () => {
+    if (baseTrend === "进入平台期") {
+      return (trend?.label === "持续上升") || ((delta ?? -99) >= 1 && (repairRate ?? 0) >= 0.5);
+    }
+    if (baseTrend === "出现回退") {
+      return (trend?.label && trend.label !== "出现回退") && ((delta ?? 0) >= 0 || (repairRate ?? 0) >= 0.5);
+    }
+    if (baseTrend === "持续上升") {
+      return (focusHitRate ?? 0) >= 0.6 && (((lastScore ?? 0) >= 7.5) || trend?.label === "持续上升");
+    }
+    if (baseTrend === "波动明显") {
+      return (trend?.label && trend.label !== "波动明显") && ((scoreRange ?? 99) <= 1.5 || (repairRate ?? 0) >= 0.5);
+    }
+    return ((delta ?? 0) >= 1 && (repairRate ?? 0) >= 0.5) || trend?.label === "持续上升";
+  };
+
+  const isIneffective = () => {
+    if (baseTrend === "进入平台期") {
+      return (trend?.label === "进入平台期" || trend?.label === "出现回退") && ((delta ?? -99) < 0.5);
+    }
+    if (baseTrend === "出现回退") {
+      return trend?.label === "出现回退" && ((delta ?? 99) < 0);
+    }
+    if (baseTrend === "持续上升") {
+      return (focusHitRate ?? 0) < 0.5 || ((lastScore ?? 0) < 7);
+    }
+    if (baseTrend === "波动明显") {
+      return trend?.label === "波动明显" && ((scoreRange ?? 0) > 1.8);
+    }
+    return ((delta ?? 0) < 0) && ((repairRate ?? 0) < 0.4);
+  };
+
+  if (isEffective()) {
+    verdict = "策略有效";
+    verdictClass = "bg-green/10 text-green";
+    if (baseTrend === "进入平台期") {
+      summary = "这次平台突破训练不只是命中了目标，而且已经出现了脱离平台的迹象。说明继续刷同层题的收益在下降，策略升级是合理的。";
+      nextAction = "减少同层重复题，转向 why / 边界条件 / 反例 / 场景迁移题。";
+    } else if (baseTrend === "出现回退") {
+      summary = "这次稳固训练起效了，回退趋势被压住，说明先降压、先稳表达的策略是对的。";
+      nextAction = "再做少量验收题确认稳定后，恢复正常强度训练。";
+    } else if (baseTrend === "持续上升") {
+      summary = "这轮迁移验收说明提升并不是只会答原题，而是开始具备跨场景复用能力。";
+      nextAction = "可以把训练重点切到更复杂场景或新的薄弱点。";
+    } else if (baseTrend === "波动明显") {
+      summary = "这轮稳定性验收说明表现开始收敛，不再只是偶尔答对，策略方向正确。";
+      nextAction = "再做 1 轮不同表述但同结构的问题，确认已经真正稳定。";
+    } else {
+      summary = "这轮训练对目标薄弱点起到了实质作用，不只是统计上命中，而是开始带来能力变化。";
+      nextAction = "保持有效策略，但把下一轮难度往上提一点。";
+    }
+  } else if (isIneffective()) {
+    verdict = "策略未奏效";
+    verdictClass = "bg-red/10 text-red";
+    if (baseTrend === "进入平台期") {
+      summary = "这轮平台突破训练虽然有针对性，但还没有真正把你从平台里拉出来。说明只是换了题皮，认知层级还没变。";
+      nextAction = "别继续刷同类题了，改成更小颗粒度拆点，或直接切到 why / 反例 / 对比题。";
+    } else if (baseTrend === "出现回退") {
+      summary = "这轮稳固训练还没把回退止住，说明当前难度或回答结构仍然偏高。";
+      nextAction = "先降难度，强制固定答题骨架，再做一轮基础稳固。";
+    } else if (baseTrend === "持续上升") {
+      summary = "这轮迁移验收暴露出提升还没有真正内化，原本的上升更像局部熟练而不是稳定能力。";
+      nextAction = "先回到修复训练，把关键点与表达主线重新压实。";
+    } else if (baseTrend === "波动明显") {
+      summary = "这轮稳定性验收没有压住波动，说明你目前还处于会答但不稳定的阶段。";
+      nextAction = "继续固定同一答题结构，减少自由发挥，再做短轮验收。";
+    } else {
+      summary = "这轮训练没有形成足够明显的能力改善，继续照原策略追加投入的性价比不高。";
+      nextAction = "应当换策略，而不是继续同配方重复。";
+    }
+  } else {
+    if (baseTrend === "进入平台期") {
+      summary = "这轮平台突破训练有一点松动迹象，但还不足以证明平台已经被打破。";
+      nextAction = "可以再做 1 轮同目标复练，但题型要更尖锐，别重复当前套路。";
+    } else if (baseTrend === "持续上升") {
+      summary = "这轮迁移验收说明已有一定迁移能力，但还不够稳，暂时不能判定完全内化。";
+      nextAction = "再补 1 轮跨场景验收，确认不是偶然发挥。";
+    } else if (baseTrend === "波动明显") {
+      summary = "这轮验收有改善，但波动还没完全收敛，说明策略部分有效。";
+      nextAction = "继续 1 轮同结构变体题，优先看稳定性而不是峰值分数。";
+    } else {
+      summary = "这轮训练对目标产生了一些作用，但证据还不够强，暂时更适合视为部分有效。";
+      nextAction = "保留策略方向，再补一轮更短、更聚焦的验证。";
+    }
+  }
+
+  return {
+    show: Boolean(trainingMeta || comparison || targeting || attempted),
+    verdict,
+    verdictLevel: verdict === "策略有效" ? "effective" : verdict === "策略未奏效" ? "ineffective" : "partial",
+    verdictClass,
+    summary,
+    nextAction,
+    evidence,
+    baseTrend,
+    trendLabel: trend?.label,
+    attempted,
+    firstScore,
+    lastScore,
+  };
+}
+
+function StrategyMetaReviewCard({ trainingMeta, targeting, comparison, items = [], persistedMeta = null }) {
+  const meta = persistedMeta || buildStrategyMetaReview({ trainingMeta, targeting, comparison, items });
+  if (!meta?.show && !persistedMeta) return null;
+  return (
+    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="text-lg font-semibold">策略成效 Meta-review</div>
+        <span className={`px-2.5 py-1 rounded-md text-[12px] font-medium ${meta.verdictClass}`}>{meta.verdict}</span>
+      </div>
+      <div className="text-[14px] text-text leading-[1.8] mb-3">{meta.summary}</div>
+      <div className="flex flex-wrap gap-2 mb-3">
+        {meta.baseTrend ? <span className="inline-flex items-center rounded-lg bg-hover px-3 py-1.5 text-[12px] font-medium text-dim">起始轨迹：{meta.baseTrend}</span> : null}
+        {meta.trendLabel ? <span className="inline-flex items-center rounded-lg bg-hover px-3 py-1.5 text-[12px] font-medium text-dim">当前轨迹：{meta.trendLabel}</span> : null}
+        {typeof meta.firstScore === "number" && typeof meta.lastScore === "number" ? <span className="inline-flex items-center rounded-lg bg-hover px-3 py-1.5 text-[12px] font-medium text-dim">最近 {items.slice(-5).length} 次：{meta.firstScore} → {meta.lastScore}</span> : null}
+      </div>
+      {meta.evidence?.length > 0 && (
+        <div className="flex flex-col gap-1.5 mb-3">
+          {meta.evidence.map((item, idx) => (
+            <div key={idx} className="px-3 py-2 rounded-lg text-[13px] text-text bg-hover border border-border">{item}</div>
+          ))}
+        </div>
+      )}
+      <div className="text-[13px] text-dim leading-[1.8]">下一步：{meta.nextAction}</div>
+    </div>
+  );
+}
+
+function TrainingLabelStatsCard({ stats }) {
+  if (!stats?.items?.length) return null;
+  return (
+    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="text-lg font-semibold">训练标签分桶表现</div>
+        <div className="text-sm text-dim">已答 {stats.answered || 0} 题</div>
+      </div>
+      {stats.summary && <div className="text-[14px] text-text leading-[1.8] mb-3">{stats.summary}</div>}
+      <div className="flex flex-col gap-2.5">
+        {stats.items.map((item, idx) => {
+          const badge = trainingLabelBadge(item.label);
+          const score = typeof item.avg_score === "number" ? item.avg_score : null;
+          const color = score == null ? "var(--border)" : score >= 8 ? "var(--green)" : score >= 6 ? "var(--accent-light)" : "var(--red)";
+          return (
+            <div key={`${item.label}-${idx}`} className="rounded-xl border border-border bg-hover px-4 py-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-1 rounded-md text-[12px] font-medium" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+                  <span className="text-[12px] text-dim">共 {item.count} 题 · 已答 {item.answered} 题</span>
+                  <span className="text-[12px] text-dim">回升 {item.improved_count} 题</span>
+                  <span className="text-[12px] text-dim">focus 命中 {item.focus_hit_count} 题</span>
+                </div>
+                <div className="text-[13px] font-semibold" style={{ color }}>{score != null ? `${score}/10` : "暂无得分"}</div>
+              </div>
+              <div className="w-full h-2 rounded bg-border overflow-hidden mb-2">
+                <div className="h-full rounded" style={{ width: `${score != null ? Math.max(6, score * 10) : 6}%`, background: color }} />
+              </div>
+              <div className="flex flex-wrap gap-2 text-[12px] text-dim">
+                <span>回升率 {(Number(item.improved_rate || 0) * 100).toFixed(0)}%</span>
+                <span>focus 命中率 {(Number(item.focus_hit_rate || 0) * 100).toFixed(0)}%</span>
+                <span>高分题 {item.high_scores || 0}</span>
+                <span>低分题 {item.low_scores || 0}</span>
+              </div>
+              {item.sample_questions?.length > 0 && (
+                <div className="mt-2 text-[12px] text-dim leading-[1.7]">
+                  题目样本：{item.sample_questions.map((q) => `「${String(q).slice(0, 28)}${String(q).length > 28 ? "…" : ""}」`).join("、")}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -758,6 +970,14 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
+                {(() => {
+                  const tb = trainingLabelBadge(q.training_label);
+                  return (
+                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: tb.bg, color: tb.color }} title={q.training_intent || q.training_label}>
+                      {tb.label}
+                    </span>
+                  );
+                })()}
                 {q.focus_area && (
                   <button
                     onClick={() => topic && navigate(`/profile/topic/${topic}`)}
@@ -772,7 +992,10 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
               </span>
             </div>
 
-            <div className="text-[15px] font-medium leading-relaxed mb-3">{q.question}</div>
+            <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
+            {q.training_intent && (
+              <div className="mb-3 text-[12px] text-dim leading-[1.7]">训练意图：{q.training_intent}</div>
+            )}
 
             <div className="bg-hover rounded-lg px-3 py-3 md:px-3.5 mb-3">
               <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
@@ -1091,7 +1314,15 @@ export default function Review() {
       <AutoScoreCard autoScore={autoScore} />
       <TrendTrainingMetaCard meta={overall?.trend_training_meta} focusTrend={overall?.targeting_stats?.focus_trend || overall?.practice_comparison?.baseline?.focus_trend} />
       <PracticeComparisonCard comparison={overall?.practice_comparison} />
+      <TrainingLabelStatsCard stats={overall?.training_label_stats} />
       <PracticeTrendCard focusLabel={overall?.practice_comparison?.focus_label} items={practiceTrend} />
+      <StrategyMetaReviewCard
+        trainingMeta={overall?.trend_training_meta}
+        targeting={overall?.targeting_stats}
+        comparison={overall?.practice_comparison}
+        items={practiceTrend}
+        persistedMeta={overall?.strategy_meta_review}
+      />
 
       {isRecording && !isRecordingDual ? (
         <SoloRecordingReview topicsCovered={topicsCovered} overall={overall} />

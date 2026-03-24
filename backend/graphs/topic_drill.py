@@ -56,6 +56,66 @@ def _load_high_freq(topic: str, user_id: str) -> str:
     return ""
 
 
+def _normalize_training_label(raw: str | None, focus_trend: str | None = None, difficulty: int | None = None, question: str | None = None) -> str:
+    text = (raw or "").strip()
+    mapping = {
+        "repair": "基础稳固",
+        "stabilize": "稳定性验收",
+        "advance": "迁移验收",
+        "platform_break": "平台突破",
+        "plateau_break": "平台突破",
+        "boundary": "边界追问",
+        "基础修复": "基础稳固",
+        "基础稳固": "基础稳固",
+        "稳定": "稳定性验收",
+        "稳定性验收": "稳定性验收",
+        "迁移": "迁移验收",
+        "迁移验收": "迁移验收",
+        "平台突破": "平台突破",
+        "边界追问": "边界追问",
+    }
+    if text in mapping:
+        return mapping[text]
+    lowered = text.lower()
+    if "platform" in lowered or "plateau" in lowered:
+        return "平台突破"
+    if "boundary" in lowered or "edge" in lowered:
+        return "边界追问"
+    if "advance" in lowered or "transfer" in lowered or "migration" in lowered:
+        return "迁移验收"
+    if "repair" in lowered or "fix" in lowered or "basic" in lowered:
+        return "基础稳固"
+    if "stabil" in lowered or "validate" in lowered:
+        return "稳定性验收"
+    q = (question or "").lower()
+    if any(x in q for x in ["边界", "极端", "如果", "反例", "异常", "限制"]):
+        return "边界追问"
+    if focus_trend == "进入平台期":
+        return "平台突破"
+    if focus_trend == "持续上升":
+        return "迁移验收"
+    if focus_trend == "出现回退":
+        return "基础稳固"
+    if isinstance(difficulty, int) and difficulty >= 4:
+        return "迁移验收"
+    return "稳定性验收"
+
+
+def _default_training_intent(label: str, focus_area: str | None = None) -> str:
+    area = (focus_area or "这个知识点").strip() or "这个知识点"
+    if label == "基础稳固":
+        return f"围绕 {area} 做概念澄清、why 和单点修复。"
+    if label == "稳定性验收":
+        return f"换一个角度验证 {area} 是否已经稳定掌握。"
+    if label == "迁移验收":
+        return f"把 {area} 迁移到新场景，检查是否真正内化。"
+    if label == "平台突破":
+        return f"通过更强约束或换角度提问，尝试打破 {area} 的平台期。"
+    if label == "边界追问":
+        return f"专门测试 {area} 在边界条件和极端场景下是否仍然成立。"
+    return f"围绕 {area} 做定向训练。"
+
+
 def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None = None, focus_label: str | None = None, focus_trend: str | None = None, practice_context: str | None = None) -> list[dict]:
     """Generate 10 personalized questions for a topic. 1 LLM call."""
     from backend.spaced_repetition import get_due_reviews, init_sr_for_existing_points
@@ -282,12 +342,12 @@ def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None
                 key=lambda q: (-_focus_hit(q), q.get("difficulty", 99))
             )
 
-        # Ensure each question has an id
+        # Ensure each question has normalized metadata
         for i, q in enumerate(questions):
-            if "id" not in q:
-                q["id"] = i + 1
-            else:
-                q["id"] = i + 1
+            q["id"] = i + 1
+            label = _normalize_training_label(q.get("training_label"), focus_trend=focus_trend, difficulty=q.get("difficulty"), question=q.get("question"))
+            q["training_label"] = label
+            q["training_intent"] = (q.get("training_intent") or "").strip() or _default_training_intent(label, q.get("focus_area"))
         return questions[:10]
     except (json.JSONDecodeError, ValueError, IndexError) as e:
         import logging

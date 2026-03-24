@@ -57,6 +57,14 @@ function strategyBadge(strategy) {
   return { label: "稳固", bg: "rgba(91,141,239,.10)", color: "var(--accent-light)" };
 }
 
+function strategyModeLabel(mode) {
+  if (mode === "repair") return "基础稳固";
+  if (mode === "stabilize") return "稳定性验收";
+  if (mode === "advance") return "迁移验收";
+  if (mode === "platform_break" || mode === "plateau_break") return "平台突破";
+  return mode || "训练策略";
+}
+
 function strategyReason(w) {
   if (!w) return "";
   if (w.adaptive_strategy === "repair") {
@@ -237,6 +245,37 @@ function WeakPointDetailContent({ w, navigate, nextTone }) {
           )}
         </div>
       )}
+      {w.best_strategy && (
+        <div className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="text-[12px] font-medium text-text">这个薄弱点更吃的训练法</span>
+            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light">
+              {w.best_strategy.strategy_label || strategyModeLabel(w.best_strategy.strategy_mode)}
+            </span>
+            <span className="text-[11px] text-dim">有效率 {(Number(w.best_strategy.verdict_rate || 0) * 100).toFixed(0)}%</span>
+            <span className="text-[11px] text-dim">尝试 {w.best_strategy.attempts || 0} 次</span>
+            {w.best_strategy.dominant_trend && <span className="text-[11px] text-dim">常见轨迹：{w.best_strategy.dominant_trend}</span>}
+          </div>
+          <div className="text-[12px] text-dim leading-[1.7]">
+            {w.best_strategy.avg_delta_score != null ? `平均分变化 ${Number(w.best_strategy.avg_delta_score).toFixed(1)}；` : ""}
+            {w.best_strategy.avg_repair_rate != null ? `平均修复率 ${(Number(w.best_strategy.avg_repair_rate) * 100).toFixed(0)}%。` : ""}
+            {w.next_focus_recommendation?.preferred_strategy_label ? ` 下一轮优先继续用「${w.next_focus_recommendation.preferred_strategy_label}」。` : ""}
+          </div>
+          {w.strategy_effectiveness?.length > 1 && (
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {w.strategy_effectiveness.slice(0, 3).map((s, idx) => (
+                <span
+                  key={`${s.strategy_mode}-${idx}`}
+                  className="px-2 py-0.5 rounded text-[11px] font-medium bg-hover text-dim max-w-full break-words text-left"
+                  title={`${s.strategy_label || strategyModeLabel(s.strategy_mode)} · 有效率 ${(Number(s.verdict_rate || 0) * 100).toFixed(0)}% · 尝试 ${s.attempts || 0} 次`}
+                >
+                  {s.strategy_label || strategyModeLabel(s.strategy_mode)} · {(Number(s.verdict_rate || 0) * 100).toFixed(0)}%
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -362,6 +401,11 @@ function WeakPointCard({ w, navigate, setStrategyFilter, topics, onOpenDetails }
         {w.next_focus_recommendation && (
           <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${nextTone.cls} max-w-full break-words sm:max-w-[220px] sm:truncate`} title={w.next_focus_recommendation.focus_label}>
             推荐 {w.next_focus_recommendation.focus_label}
+          </span>
+        )}
+        {w.best_strategy?.strategy_label && (
+          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/10 text-accent-light max-w-full break-words sm:max-w-[220px] sm:truncate" title={w.best_strategy.strategy_label}>
+            更吃 {w.best_strategy.strategy_label}
           </span>
         )}
         <button

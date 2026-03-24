@@ -188,10 +188,23 @@ DRILL_QUESTION_GEN_PROMPT = """你是「{topic_name}」领域的技术专家，�
 返回格式（只返回 JSON，不要其他内容）：
 ```json
 [
-    {{"id": 1, "question": "问题内容", "difficulty": 2, "focus_area": "考察的知识点"}},
-    {{"id": 2, "question": "问题内容", "difficulty": 2, "focus_area": "考察的知识点"}}
+    {{"id": 1, "question": "问题内容", "difficulty": 2, "focus_area": "考察的知识点", "training_label": "基础稳固", "training_intent": "为什么题 / 概念澄清 / 单点修复"}},
+    {{"id": 2, "question": "问题内容", "difficulty": 2, "focus_area": "考察的知识点", "training_label": "平台突破", "training_intent": "边界追问 / 反例 / why / 场景迁移"}}
 ]
-```"""
+```
+
+其中 `training_label` 只能从下面几类里选：
+- 基础稳固：概念澄清、why、低复杂度单点应用
+- 稳定性验收：中等难度追问、场景变体、边界条件，用于验证是否稳定
+- 迁移验收：跨场景复用、工程权衡、相邻知识点迁移
+- 平台突破：当某点进入平台期时，用反例、强约束、换角度问题打破平台
+- 边界追问：专门测试边界 case、极端情况、限制条件
+
+要求：
+- 每道题都必须带 `training_label`
+- `training_intent` 用一句简短中文解释这题为什么这样设计
+- 前 3 题的标签必须能反映本轮训练主策略，不要 10 题都写成同一种标签
+"""
 
 DRILL_BATCH_EVAL_PROMPT = """你是「{topic_name}」领域的技术专家，正在批量评估候选人的训练回答。
 

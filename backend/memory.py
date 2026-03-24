@@ -233,6 +233,7 @@ def _build_next_focus_recommendation(wp: dict) -> dict | None:
     adaptive_strategy = wp.get("adaptive_strategy") or "stabilize"
     semantic_buckets = [x for x in (wp.get("semantic_buckets") or []) if x]
     semantic_bucket = wp.get("semantic_bucket")
+    best_strategy = wp.get("best_strategy") if isinstance(wp.get("best_strategy"), dict) else None
 
     if candidates:
         ranked = []
@@ -246,6 +247,11 @@ def _build_next_focus_recommendation(wp: dict) -> dict | None:
                 score += 8
             elif adaptive_strategy == "advance":
                 score -= 4
+            if best_strategy and best_strategy.get("strategy_label"):
+                if best_strategy.get("strategy_mode") == adaptive_strategy:
+                    score += 6
+                if best_strategy.get("verdict_rate", 0) >= 0.6:
+                    score += 4
             ranked.append((score, item))
         ranked.sort(key=lambda x: x[0], reverse=True)
         best_score, best = ranked[0]
@@ -256,6 +262,8 @@ def _build_next_focus_recommendation(wp: dict) -> dict | None:
             reason_bits.append("当前更适合用命中率高的 focus 做稳定性验证")
         else:
             reason_bits.append("当前可用已有高命中 focus 做验收型训练")
+        if best_strategy and best_strategy.get("strategy_label"):
+            reason_bits.append(f"这个薄弱点历史上更吃「{best_strategy.get('strategy_label')}」")
         if best.get("focus_hit_rate") is not None:
             reason_bits.append(f"该 focus 历史命中率 {(float(best.get('focus_hit_rate', 0.0)) * 100):.0f}%")
         if best.get("improvement_rate") is not None:
@@ -275,32 +283,44 @@ def _build_next_focus_recommendation(wp: dict) -> dict | None:
             "trend_label": best.get("trend_label"),
             "trend_summary": best.get("trend_summary"),
             "trend_advice": best.get("trend_advice"),
+            "preferred_strategy_label": best_strategy.get("strategy_label") if best_strategy else None,
+            "preferred_strategy_mode": best_strategy.get("strategy_mode") if best_strategy else None,
         }
 
     if semantic_buckets or semantic_bucket:
         buckets = semantic_buckets or ([semantic_bucket] if semantic_bucket else [])
         label = " + ".join(_bucket_label(x) for x in buckets[:2] if x).strip()
         if label:
+            reason = f"该薄弱点还没有稳定的 focus 历史，先按语义桶 {label} 收敛到更具体的问题边界。"
+            if best_strategy and best_strategy.get("strategy_label"):
+                reason += f" 历史上它更适合「{best_strategy.get('strategy_label')}」。"
             return {
                 "focus_label": label,
                 "focus_keyword": wp.get("canonical_query") or wp.get("point") or label,
                 "source": "semantic_bucket",
                 "score": round(priority_score * 1.5 + (8 if adaptive_strategy == "repair" else 0), 1),
                 "confidence": "medium",
-                "reason": f"该薄弱点还没有稳定的 focus 历史，先按语义桶 {label} 收敛到更具体的问题边界。",
+                "reason": reason,
                 "topic_level": True,
+                "preferred_strategy_label": best_strategy.get("strategy_label") if best_strategy else None,
+                "preferred_strategy_mode": best_strategy.get("strategy_mode") if best_strategy else None,
             }
 
     point_text = wp.get("point") or wp.get("canonical_query")
     if point_text:
+        reason = "当前还缺少稳定的 focus 历史，先围绕这个薄弱点本身做一次定向 drill。"
+        if best_strategy and best_strategy.get("strategy_label"):
+            reason += f" 训练方式优先采用「{best_strategy.get('strategy_label')}」。"
         return {
             "focus_label": point_text[:48],
             "focus_keyword": wp.get("canonical_query") or point_text,
             "source": "weak_point",
             "score": round(priority_score, 1),
             "confidence": "low",
-            "reason": "当前还缺少稳定的 focus 历史，先围绕这个薄弱点本身做一次定向 drill。",
+            "reason": reason,
             "topic_level": True,
+            "preferred_strategy_label": best_strategy.get("strategy_label") if best_strategy else None,
+            "preferred_strategy_mode": best_strategy.get("strategy_mode") if best_strategy else None,
         }
     return None
 
@@ -420,6 +440,79 @@ def _refresh_weak_point_aggregates(profile: dict):
         focus_effectiveness.sort(key=lambda x: (-x.get("improvement_rate", 0), -x.get("focus_hit_rate", 0), -(x.get("attempts", 0))))
         wp["focus_effectiveness"] = focus_effectiveness[:5]
         wp["best_focus"] = focus_effectiveness[0] if focus_effectiveness else None
+
+        strategy_effectiveness = []
+        strategy_stats = {}
+        strategy_history = [x for x in (wp.get("strategy_effectiveness") or []) if isinstance(x, dict)]
+        for item in strategy_history:
+            mode = str(item.get("strategy_mode") or "").strip()
+            if not mode:
+                continue
+            strategy_stats[mode] = {
+                "strategy_mode": mode,
+                "strategy_label": item.get("strategy_label") or mode,
+                "attempts": int(item.get("attempts", 0) or 0),
+                "effective_count": int(item.get("effective_count", 0) or 0),
+                "partial_count": int(item.get("partial_count", 0) or 0),
+                "ineffective_count": int(item.get("ineffective_count", 0) or 0),
+                "delta_scores": [],
+                "repair_rates": [],
+                "trend_labels": [],
+            }
+        for item in [x for x in (wp.get("strategy_history") or []) if isinstance(x, dict)]:
+            mode = str(item.get("strategy_mode") or "").strip()
+            if not mode:
+                continue
+            stat = strategy_stats.setdefault(mode, {
+                "strategy_mode": mode,
+                "strategy_label": item.get("strategy_label") or mode,
+                "attempts": 0,
+                "effective_count": 0,
+                "partial_count": 0,
+                "ineffective_count": 0,
+                "delta_scores": [],
+                "repair_rates": [],
+                "trend_labels": [],
+            })
+            stat["attempts"] += 1
+            verdict_level = str(item.get("verdict_level") or "partial")
+            if verdict_level == "effective":
+                stat["effective_count"] += 1
+            elif verdict_level == "ineffective":
+                stat["ineffective_count"] += 1
+            else:
+                stat["partial_count"] += 1
+            if isinstance(item.get("delta_score"), (int, float)):
+                stat["delta_scores"].append(float(item.get("delta_score")))
+            if isinstance(item.get("repair_rate"), (int, float)):
+                stat["repair_rates"].append(float(item.get("repair_rate")))
+            if item.get("trend_label"):
+                stat["trend_labels"].append(str(item.get("trend_label")))
+        for stat in strategy_stats.values():
+            attempts = max(int(stat.get("attempts", 0) or 0), 1)
+            avg_delta = round(sum(stat["delta_scores"]) / len(stat["delta_scores"]), 1) if stat["delta_scores"] else None
+            avg_repair_rate = round(sum(stat["repair_rates"]) / len(stat["repair_rates"]), 2) if stat["repair_rates"] else None
+            trend_counts = {}
+            for label in stat["trend_labels"]:
+                trend_counts[label] = trend_counts.get(label, 0) + 1
+            dominant_trend = None
+            if trend_counts:
+                dominant_trend = sorted(trend_counts.items(), key=lambda x: (-x[1], x[0]))[0][0]
+            strategy_effectiveness.append({
+                "strategy_mode": stat["strategy_mode"],
+                "strategy_label": stat["strategy_label"],
+                "attempts": int(stat.get("attempts", 0) or 0),
+                "effective_count": int(stat.get("effective_count", 0) or 0),
+                "partial_count": int(stat.get("partial_count", 0) or 0),
+                "ineffective_count": int(stat.get("ineffective_count", 0) or 0),
+                "verdict_rate": round((int(stat.get("effective_count", 0) or 0) + int(stat.get("partial_count", 0) or 0) * 0.5) / attempts, 2),
+                "avg_delta_score": avg_delta,
+                "avg_repair_rate": avg_repair_rate,
+                "dominant_trend": dominant_trend,
+            })
+        strategy_effectiveness.sort(key=lambda x: (-x.get("verdict_rate", 0), -x.get("avg_delta_score") if x.get("avg_delta_score") is not None else 999, -x.get("attempts", 0)))
+        wp["strategy_effectiveness"] = strategy_effectiveness[:4]
+        wp["best_strategy"] = strategy_effectiveness[0] if strategy_effectiveness else None
 
         priority_score = 0.0
         priority_score += min(recent_low_streak, 5) * 3.0

@@ -333,6 +333,28 @@ export default function History() {
                         focus {(Number(s.focus_hit_rate || 0) * 100).toFixed(0)}% · 前3 {s.front3_focus_hits || 0}
                       </span>
                     )}
+                    {s.strategy_verdict && (
+                      <span
+                        className="px-2.5 py-1 rounded-md text-[12px] text-center"
+                        style={{
+                          background:
+                            s.strategy_verdict_level === "effective"
+                              ? "rgba(34,197,94,.12)"
+                              : s.strategy_verdict_level === "ineffective"
+                                ? "rgba(239,68,68,.12)"
+                                : "rgba(91,141,239,.12)",
+                          color:
+                            s.strategy_verdict_level === "effective"
+                              ? "var(--green)"
+                              : s.strategy_verdict_level === "ineffective"
+                                ? "var(--red)"
+                                : "var(--accent-light)",
+                        }}
+                        title={s.strategy_next_action || s.strategy_verdict}
+                      >
+                        {s.strategy_verdict}
+                      </span>
+                    )}
                     {s.topic && ((s.semantic_buckets || []).length > 0 || s.focus_label) && (
                       <button
                         onClick={(e) => {

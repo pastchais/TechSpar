@@ -310,6 +310,7 @@ def list_sessions(
         weak_points = json.loads(r["weak_points"] or "[]")
         scores = json.loads(r["scores"] or "[]")
         targeting = (overall.get("targeting_stats") or {}) if isinstance(overall, dict) else {}
+        strategy_meta = (overall.get("strategy_meta_review") or {}) if isinstance(overall, dict) else {}
         items.append({
             "session_id": r["session_id"],
             "mode": r["mode"],
@@ -322,6 +323,10 @@ def list_sessions(
             "focus_hit_count": targeting.get("focus_hit_count"),
             "focus_hit_rate": targeting.get("focus_hit_rate"),
             "front3_focus_hits": targeting.get("front3_focus_hits"),
+            "strategy_verdict": strategy_meta.get("verdict"),
+            "strategy_verdict_level": strategy_meta.get("verdict_level"),
+            "strategy_next_action": strategy_meta.get("next_action"),
+            "strategy_trend_label": strategy_meta.get("trend_label"),
         })
     return {"items": items, "total": total}
 
