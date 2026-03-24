@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { PageTitle, SectionTitle, SubtleButton } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
-import { getReview, getReferenceAnswer, scoreInterviewAnswer, getTopics } from "../api/interview";
+import { getReview, getReferenceAnswer, followupReferenceAnswer, scoreInterviewAnswer, getTopics } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
 
 function getScoreColor(score) {
@@ -252,24 +252,68 @@ function SoloRecordingReview({ topicsCovered, overall }) {
   );
 }
 
-function DrillReview({ scores, overall, questions, answers, topic, topics }) {
+function DrillReview({ sessionId, scores, overall, questions, answers, topic, topics, persistedReferenceAnswers = {} }) {
   const answerMap = {};
   for (const a of (answers || [])) answerMap[a.question_id] = a.answer;
   const scoreMap = {};
   for (const s of (scores || [])) scoreMap[s.question_id] = s;
-  const [refAnswers, setRefAnswers] = useState({});
+  const [refAnswers, setRefAnswers] = useState(() => {
+    const seeded = {};
+    Object.entries(persistedReferenceAnswers || {}).forEach(([key, value]) => {
+      const qid = value?.question_id;
+      if (qid != null) seeded[qid] = value;
+    });
+    return seeded;
+  });
   const [refLoading, setRefLoading] = useState({});
+  const [followupOpen, setFollowupOpen] = useState({});
+  const [followupInput, setFollowupInput] = useState({});
+  const [followupLoading, setFollowupLoading] = useState({});
+  const [followupAnswer, setFollowupAnswer] = useState({});
 
-  const handleRefAnswer = async (qId, questionText) => {
-    if (refAnswers[qId]) return;
+  const handleRefAnswer = async (qId, questionText, forceRegenerate = false) => {
+    if (refAnswers[qId]?.reference_answer && !forceRegenerate) return;
     setRefLoading((p) => ({ ...p, [qId]: true }));
     try {
-      const data = await getReferenceAnswer(topic, questionText);
-      setRefAnswers((p) => ({ ...p, [qId]: data.reference_answer }));
+      const data = await getReferenceAnswer(sessionId, topic, questionText, qId, forceRegenerate);
+      setRefAnswers((p) => ({
+        ...p,
+        [qId]: {
+          reference_answer: data.reference_answer,
+          generated_at: data.generated_at,
+          cached: data.cached,
+          question_key: data.question_key,
+          knowledge_refs: data.knowledge_refs || [],
+          model: data.model,
+        },
+      }));
     } catch (e) {
-      setRefAnswers((p) => ({ ...p, [qId]: "生成失败: " + e.message }));
+      setRefAnswers((p) => ({
+        ...p,
+        [qId]: {
+          reference_answer: "生成失败: " + e.message,
+          generated_at: null,
+          cached: false,
+          question_key: null,
+          knowledge_refs: [],
+        },
+      }));
     }
     setRefLoading((p) => ({ ...p, [qId]: false }));
+  };
+
+  const handleFollowup = async (qId, questionText) => {
+    const text = (followupInput[qId] || "").trim();
+    const referenceAnswer = refAnswers[qId]?.reference_answer || "";
+    if (!text) return;
+    setFollowupLoading((p) => ({ ...p, [qId]: true }));
+    try {
+      const data = await followupReferenceAnswer(sessionId, topic, questionText, text, qId, referenceAnswer);
+      setFollowupAnswer((p) => ({ ...p, [qId]: data.answer }));
+    } catch (e) {
+      setFollowupAnswer((p) => ({ ...p, [qId]: "追问失败: " + e.message }));
+    }
+    setFollowupLoading((p) => ({ ...p, [qId]: false }));
   };
 
   const avgScore = overall?.avg_score || "-";
@@ -564,14 +608,75 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
 
             {topic && (
               <div className="mt-3 pt-3 border-t border-border">
-                {refAnswers[q.id] ? (
+                {refAnswers[q.id]?.reference_answer ? (
                   <div className="text-sm leading-[1.8]">
-                    <div className="text-xs font-semibold text-dim mb-2 flex items-center gap-1.5">
-                      <BookOpen size={13} /> 参考答案
+                    <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
+                      <span className="flex items-center gap-1.5">
+                        <BookOpen size={13} /> 标准参考答案
+                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {refAnswers[q.id]?.generated_at && (
+                          <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
+                        )}
+                        <button
+                          className="text-[12px] text-dim bg-transparent border-none cursor-pointer"
+                          onClick={() => handleRefAnswer(q.id, q.question, true)}
+                          disabled={refLoading[q.id]}
+                        >
+                          {refLoading[q.id] ? "重新生成中..." : "重新生成"}
+                        </button>
+                      </div>
                     </div>
                     <div className="md-content bg-hover rounded-lg px-3.5 py-3">
-                      <ReactMarkdown>{refAnswers[q.id]}</ReactMarkdown>
+                      <ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown>
                     </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
+                        onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}
+                      >
+                        <BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}
+                      </button>
+                    </div>
+
+                    {followupOpen[q.id] && (
+                      <div className="mt-3 rounded-lg border border-border bg-hover px-3 py-3">
+                        <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
+                        <textarea
+                          className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none"
+                          placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子"
+                          value={followupInput[q.id] || ""}
+                          onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))}
+                        />
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          <button
+                            className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50"
+                            onClick={() => handleFollowup(q.id, q.question)}
+                            disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}
+                          >
+                            {followupLoading[q.id] ? "AI 思考中..." : "发送追问"}
+                          </button>
+                          <button
+                            className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer"
+                            onClick={() => {
+                              setFollowupInput((p) => ({ ...p, [q.id]: "" }));
+                              setFollowupAnswer((p) => ({ ...p, [q.id]: "" }));
+                            }}
+                          >
+                            清空
+                          </button>
+                        </div>
+                        {followupAnswer[q.id] && (
+                          <div className="mt-3">
+                            <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导</div>
+                            <div className="md-content bg-card rounded-lg px-3.5 py-3">
+                              <ReactMarkdown>{followupAnswer[q.id]}</ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <button
@@ -580,7 +685,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                     disabled={refLoading[q.id]}
                   >
                     <BookOpen size={13} />
-                    {refLoading[q.id] ? "正在生成参考答案..." : "查看参考答案"}
+                    {refLoading[q.id] ? "正在生成参考答案..." : "查看标准参考答案"}
                   </button>
                 )}
               </div>
@@ -613,6 +718,7 @@ export default function Review() {
   const [topics, setTopics] = useState({});
   const [topicsCovered, setTopicsCovered] = useState(stateData.topics_covered || []);
   const [autoScore, setAutoScore] = useState(stateData.auto_score || null);
+  const [referenceAnswers, setReferenceAnswers] = useState(stateData.reference_answers || {});
   const [showTranscript, setShowTranscript] = useState(false);
   const [loading, setLoading] = useState(!review && !scores);
 
@@ -647,6 +753,7 @@ export default function Review() {
             const wp = Array.isArray(data.weak_points) ? data.weak_points : [];
             if (wp.length) setOverall((prev) => ({ ...prev, new_weak_points: wp }));
           }
+          if (data.reference_answers) setReferenceAnswers(data.reference_answers);
           if (data.auto_score && Object.keys(data.auto_score).length) {
             setAutoScore(data.auto_score);
           } else if (data.review) {
@@ -682,7 +789,7 @@ export default function Review() {
       {isRecording && !isRecordingDual ? (
         <SoloRecordingReview topicsCovered={topicsCovered} overall={overall} />
       ) : showDrill ? (
-        <DrillReview scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} />
+        <DrillReview sessionId={sessionId} scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} persistedReferenceAnswers={referenceAnswers} />
       ) : (
         <>
           <DimensionScores

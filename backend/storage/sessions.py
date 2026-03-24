@@ -67,6 +67,7 @@ def _get_conn() -> sqlite3.Connection:
             weak_points TEXT DEFAULT '[]',
             overall TEXT DEFAULT '{}',
             auto_score TEXT DEFAULT '{}',
+            reference_answers TEXT DEFAULT '{}',
             review TEXT,
             user_id TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -74,7 +75,7 @@ def _get_conn() -> sqlite3.Connection:
         )
     """)
     # Migrate: add columns if missing (existing DBs)
-    for col, default in [("questions", "'[]'"), ("overall", "'{}'"), ("auto_score", "'{}'"), ("user_id", "NULL")]:
+    for col, default in [("questions", "'[]'"), ("overall", "'{}'"), ("auto_score", "'{}'"), ("reference_answers", "'{}'"), ("user_id", "NULL")]:
         try:
             conn.execute(f"SELECT {col} FROM sessions LIMIT 1")
         except sqlite3.OperationalError:
@@ -142,16 +143,48 @@ def save_drill_answers(session_id: str, answers: list[dict], *, user_id: str):
 
 
 def save_review(session_id: str, review: str, scores: list = None,
-                weak_points: list = None, overall: dict = None, auto_score: dict = None, *, user_id: str):
+                weak_points: list = None, overall: dict = None, auto_score: dict = None,
+                reference_answers: dict | None = None, *, user_id: str):
     conn = _get_conn()
+    if reference_answers is None:
+        conn.execute(
+            "UPDATE sessions SET review = ?, scores = ?, weak_points = ?, overall = ?, auto_score = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE session_id = ? AND user_id = ?",
+            (review, json.dumps(scores or [], ensure_ascii=False),
+             json.dumps(weak_points or [], ensure_ascii=False),
+             json.dumps(overall or {}, ensure_ascii=False),
+             json.dumps(auto_score or {}, ensure_ascii=False),
+             session_id, user_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE sessions SET review = ?, scores = ?, weak_points = ?, overall = ?, auto_score = ?, reference_answers = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE session_id = ? AND user_id = ?",
+            (review, json.dumps(scores or [], ensure_ascii=False),
+             json.dumps(weak_points or [], ensure_ascii=False),
+             json.dumps(overall or {}, ensure_ascii=False),
+             json.dumps(auto_score or {}, ensure_ascii=False),
+             json.dumps(reference_answers or {}, ensure_ascii=False),
+             session_id, user_id),
+        )
+    conn.commit()
+    conn.close()
+
+
+def upsert_reference_answer(session_id: str, question_key: str, payload: dict, *, user_id: str):
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT reference_answers FROM sessions WHERE session_id = ? AND user_id = ?",
+        (session_id, user_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return
+    current = json.loads(row["reference_answers"] or "{}")
+    current[question_key] = payload
     conn.execute(
-        "UPDATE sessions SET review = ?, scores = ?, weak_points = ?, overall = ?, auto_score = ?, updated_at = CURRENT_TIMESTAMP "
-        "WHERE session_id = ? AND user_id = ?",
-        (review, json.dumps(scores or [], ensure_ascii=False),
-         json.dumps(weak_points or [], ensure_ascii=False),
-         json.dumps(overall or {}, ensure_ascii=False),
-         json.dumps(auto_score or {}, ensure_ascii=False),
-         session_id, user_id),
+        "UPDATE sessions SET reference_answers = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ? AND user_id = ?",
+        (json.dumps(current, ensure_ascii=False), session_id, user_id),
     )
     conn.commit()
     conn.close()
@@ -173,6 +206,7 @@ def get_session(session_id: str, *, user_id: str) -> dict | None:
     result["weak_points"] = json.loads(result["weak_points"])
     result["overall"] = json.loads(result.get("overall", "{}") or "{}")
     result["auto_score"] = json.loads(result.get("auto_score", "{}") or "{}")
+    result["reference_answers"] = json.loads(result.get("reference_answers", "{}") or "{}")
     return result
 
 

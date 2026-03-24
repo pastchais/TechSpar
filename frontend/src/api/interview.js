@@ -137,11 +137,34 @@ export async function getReview(sessionId) {
   return res.json();
 }
 
-export async function getReferenceAnswer(topic, question) {
+export async function getReferenceAnswer(sessionId, topic, question, questionId = null, forceRegenerate = false) {
   const res = await authFetch(`${API_BASE}/interview/reference-answer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic, question }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      topic,
+      question,
+      question_id: questionId,
+      force_regenerate: forceRegenerate,
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function followupReferenceAnswer(sessionId, topic, question, followup, questionId = null, referenceAnswer = "") {
+  const res = await authFetch(`${API_BASE}/interview/reference-answer/followup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: sessionId,
+      topic,
+      question,
+      question_id: questionId,
+      followup,
+      reference_answer: referenceAnswer,
+    }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
