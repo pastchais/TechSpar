@@ -27,6 +27,7 @@ from backend.storage.sessions import (
     create_session, append_message, save_review, save_drill_answers,
     get_session, list_sessions, list_sessions_by_topic,
     delete_session, list_distinct_topics, upsert_reference_answer,
+    append_reference_followup,
 )
 from backend.graph import build_graph
 from backend.auth import (
@@ -1765,10 +1766,21 @@ async def followup_reference_answer(body: dict, user_id: str = Depends(get_curre
 
     llm = get_langchain_llm()
     resp = llm.invoke([HumanMessage(content=prompt)])
+    answer = resp.content.strip()
+    item = {
+        "question": question,
+        "question_id": question_id,
+        "followup": followup,
+        "answer": answer,
+        "created_at": datetime.now().isoformat(),
+        "model": settings.model,
+    }
+    append_reference_followup(session_id, key, item, user_id=user_id)
     return {
-        "answer": resp.content.strip(),
+        "answer": answer,
         "question_key": key,
         "reference_generated_at": stored.get("generated_at"),
+        "history": (session.get("reference_followups") or {}).get(key, []) + [item],
     }
 
 

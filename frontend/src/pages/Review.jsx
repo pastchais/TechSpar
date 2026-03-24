@@ -260,7 +260,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
   );
 }
 
-function DrillReview({ sessionId, scores, overall, questions, answers, topic, topics, persistedReferenceAnswers = {} }) {
+function DrillReview({ sessionId, scores, overall, questions, answers, topic, topics, persistedReferenceAnswers = {}, persistedReferenceFollowups = {} }) {
   const answerMap = {};
   for (const a of (answers || [])) answerMap[a.question_id] = a.answer;
   const scoreMap = {};
@@ -277,7 +277,14 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
   const [followupOpen, setFollowupOpen] = useState({});
   const [followupInput, setFollowupInput] = useState({});
   const [followupLoading, setFollowupLoading] = useState({});
-  const [followupAnswer, setFollowupAnswer] = useState({});
+  const [followupHistory, setFollowupHistory] = useState(() => {
+    const seeded = {};
+    Object.entries(persistedReferenceFollowups || {}).forEach(([key, items]) => {
+      const qid = String(key || "").startsWith("q:") ? Number(String(key).slice(2)) : null;
+      if (qid != null && !Number.isNaN(qid)) seeded[qid] = items || [];
+    });
+    return seeded;
+  });
 
   const handleRefAnswer = async (qId, questionText, forceRegenerate = false) => {
     if (refAnswers[qId]?.reference_answer && !forceRegenerate) return;
@@ -317,9 +324,22 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
     setFollowupLoading((p) => ({ ...p, [qId]: true }));
     try {
       const data = await followupReferenceAnswer(sessionId, topic, questionText, text, qId, referenceAnswer);
-      setFollowupAnswer((p) => ({ ...p, [qId]: data.answer }));
+      setFollowupHistory((p) => ({ ...p, [qId]: data.history || [] }));
+      setFollowupInput((p) => ({ ...p, [qId]: "" }));
     } catch (e) {
-      setFollowupAnswer((p) => ({ ...p, [qId]: "追问失败: " + e.message }));
+      setFollowupHistory((p) => ({
+        ...p,
+        [qId]: [
+          ...(p[qId] || []),
+          {
+            followup: text,
+            answer: "追问失败: " + e.message,
+            created_at: new Date().toISOString(),
+            model: null,
+            error: true,
+          },
+        ],
+      }));
     }
     setFollowupLoading((p) => ({ ...p, [qId]: false }));
   };
@@ -681,17 +701,28 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
                             className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer"
                             onClick={() => {
                               setFollowupInput((p) => ({ ...p, [q.id]: "" }));
-                              setFollowupAnswer((p) => ({ ...p, [q.id]: "" }));
                             }}
                           >
-                            清空
+                            清空输入
                           </button>
                         </div>
-                        {followupAnswer[q.id] && (
+                        {followupHistory[q.id]?.length > 0 && (
                           <div className="mt-3">
-                            <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导</div>
-                            <div className="md-content bg-card rounded-lg px-3.5 py-3">
-                              <ReactMarkdown>{followupAnswer[q.id]}</ReactMarkdown>
+                            <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导记录</div>
+                            <div className="flex flex-col gap-3">
+                              {followupHistory[q.id].map((item, idx) => (
+                                <div key={`${q.id}-${idx}`} className="rounded-lg border border-border bg-card px-3.5 py-3">
+                                  <div className="text-[12px] font-semibold text-accent-light mb-1">你追问</div>
+                                  <div className="text-sm leading-[1.7] whitespace-pre-wrap">{item.followup}</div>
+                                  <div className="text-[12px] font-semibold text-dim mt-3 mb-1">AI 回答</div>
+                                  <div className="md-content">
+                                    <ReactMarkdown>{item.answer || ""}</ReactMarkdown>
+                                  </div>
+                                  {item.created_at && (
+                                    <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -739,6 +770,7 @@ export default function Review() {
   const [topicsCovered, setTopicsCovered] = useState(stateData.topics_covered || []);
   const [autoScore, setAutoScore] = useState(stateData.auto_score || null);
   const [referenceAnswers, setReferenceAnswers] = useState(stateData.reference_answers || {});
+  const [referenceFollowups, setReferenceFollowups] = useState(stateData.reference_followups || {});
   const [showTranscript, setShowTranscript] = useState(false);
   const [loading, setLoading] = useState(!review && !scores);
 
@@ -774,6 +806,7 @@ export default function Review() {
             if (wp.length) setOverall((prev) => ({ ...prev, new_weak_points: wp }));
           }
           if (data.reference_answers) setReferenceAnswers(data.reference_answers);
+          if (data.reference_followups) setReferenceFollowups(data.reference_followups);
           if (data.auto_score && Object.keys(data.auto_score).length) {
             setAutoScore(data.auto_score);
           } else if (data.review) {
@@ -809,7 +842,7 @@ export default function Review() {
       {isRecording && !isRecordingDual ? (
         <SoloRecordingReview topicsCovered={topicsCovered} overall={overall} />
       ) : showDrill ? (
-        <DrillReview sessionId={sessionId} scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} persistedReferenceAnswers={referenceAnswers} />
+        <DrillReview sessionId={sessionId} scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} persistedReferenceAnswers={referenceAnswers} persistedReferenceFollowups={referenceFollowups} />
       ) : (
         <>
           <DimensionScores
