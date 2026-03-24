@@ -55,6 +55,7 @@ RECORDING_DUAL_EVAL_PROMPT = """你是资深技术面试官，正在评估候选
 返回 JSON（只返回 JSON，不要其他内容）：
 ```json
 {{
+    "confidence": 0.82,
     "scores": [
         {{
             "question_id": 1,
@@ -69,6 +70,7 @@ RECORDING_DUAL_EVAL_PROMPT = """你是资深技术面试官，正在评估候选
     "overall": {{
         "avg_score": 6.5,
         "summary": "整体表现的一段话评价",
+        "confidence": 0.82,
         "new_weak_points": [{{"point": "薄弱点描述", "topic": "所属领域"}}],
         "new_strong_points": [{{"point": "强项描述", "topic": "所属领域"}}],
         "communication_observations": {{
@@ -112,6 +114,7 @@ RECORDING_SOLO_EVAL_PROMPT = """你是资深技术面试官，正在评估一段
 返回 JSON（只返回 JSON，不要其他内容）：
 ```json
 {{
+    "confidence": 0.82,
     "topics_covered": [
         {{
             "id": 1,
@@ -127,6 +130,7 @@ RECORDING_SOLO_EVAL_PROMPT = """你是资深技术面试官，正在评估一段
     "overall": {{
         "avg_score": 6.5,
         "summary": "整体表现的一段话评价",
+        "confidence": 0.82,
         "new_weak_points": [{{"point": "薄弱点描述", "topic": "所属领域"}}],
         "new_strong_points": [{{"point": "强项描述", "topic": "所属领域"}}],
         "communication_observations": {{

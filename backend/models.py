@@ -55,6 +55,8 @@ class TopicDrillState(TypedDict, total=False):
 class StartInterviewRequest(BaseModel):
     mode: InterviewMode
     topic: str | None = None
+    focus_keyword: str | None = None
+    focus_label: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -84,3 +86,24 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class AdminSettingsRequest(BaseModel):
+    model: str
+    temperature: float = Field(ge=0.0, le=2.0)
+    min_confidence_to_persist: float = Field(ge=0.0, le=1.0)
+    allow_registration: bool
+
+
+class InterviewScoreRequest(BaseModel):
+    mode: str
+    topic: str | None = None
+    question: str | None = None
+    answer: str | None = None
+    transcript: list[dict] = Field(default_factory=list)
+    review: str = ""
+    reference_answer: str = ""
+
+
+class QueryHintsRequest(BaseModel):
+    query: str = ""

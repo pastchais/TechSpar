@@ -1,0 +1,47 @@
+services:
+  techspar-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: techspar-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ENV: production
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "8000"
+    ports:
+      - "127.0.0.1:8324:8000"
+
+  techspar-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: techspar-frontend
+    restart: unless-stopped
+    depends_on:
+      - techspar-backend
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2
+    container_name: techspar-caddy
+    restart: unless-stopped
+    depends_on:
+      - techspar-frontend
+      - techspar-backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

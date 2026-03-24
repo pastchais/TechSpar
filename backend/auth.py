@@ -52,6 +52,15 @@ def init_users_table():
 def ensure_default_user():
     """Create default user from .env config if not exists."""
     email = settings.default_email.lower().strip()
+
+    if settings.env.lower() == "production":
+        weak_secret = settings.jwt_secret in {"", "change-me-in-production", "dev-secret", "techspar-dev-secret"}
+        weak_password = settings.default_password in {"", "admin123", "password", "123456", "changeme"}
+        if weak_secret:
+            raise RuntimeError("Refusing to start in production with a weak JWT secret.")
+        if weak_password:
+            raise RuntimeError("Refusing to create default user in production with a weak default password.")
+
     conn = _get_conn()
     existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
     if existing:

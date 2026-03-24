@@ -5,8 +5,51 @@ from datetime import datetime
 from pathlib import Path
 
 from backend.config import settings
+from backend.query_hints import build_query_hints
 
 DB_PATH = settings.db_path
+
+
+def _collect_session_semantic_buckets(overall: dict, weak_points: list, scores: list) -> list[str]:
+    buckets: list[str] = []
+    seen: set[str] = set()
+
+    def add(bucket: str | None):
+        if not bucket or bucket in seen:
+            return
+        seen.add(bucket)
+        buckets.append(bucket)
+
+    for item in (overall.get("targeting_stats", {}).get("strategy_snapshot", []) or []):
+        add(item.get("semantic_bucket"))
+        for b in item.get("semantic_buckets", []) or []:
+            add(b)
+    for item in (overall.get("targeting_stats", {}).get("matched_items", []) or []):
+        add(item.get("semantic_bucket"))
+        for b in item.get("semantic_buckets", []) or []:
+            add(b)
+    for item in weak_points or []:
+        if isinstance(item, dict):
+            add(item.get("semantic_bucket"))
+            for b in item.get("semantic_buckets", []) or []:
+                add(b)
+        elif isinstance(item, str):
+            hints = build_query_hints(item)
+            add(hints.get("semantic_bucket"))
+            for b in hints.get("semantic_buckets", []) or []:
+                add(b)
+    for item in scores or []:
+        if not isinstance(item, dict):
+            continue
+        add(item.get("semantic_bucket"))
+        for b in item.get("semantic_buckets", []) or []:
+            add(b)
+        if item.get("weak_point"):
+            hints = build_query_hints(item.get("weak_point"))
+            add(hints.get("semantic_bucket"))
+            for b in hints.get("semantic_buckets", []) or []:
+                add(b)
+    return buckets[:8]
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -23,6 +66,7 @@ def _get_conn() -> sqlite3.Connection:
             scores TEXT DEFAULT '[]',
             weak_points TEXT DEFAULT '[]',
             overall TEXT DEFAULT '{}',
+            auto_score TEXT DEFAULT '{}',
             review TEXT,
             user_id TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -30,7 +74,7 @@ def _get_conn() -> sqlite3.Connection:
         )
     """)
     # Migrate: add columns if missing (existing DBs)
-    for col, default in [("questions", "'[]'"), ("overall", "'{}'"), ("user_id", "NULL")]:
+    for col, default in [("questions", "'[]'"), ("overall", "'{}'"), ("auto_score", "'{}'"), ("user_id", "NULL")]:
         try:
             conn.execute(f"SELECT {col} FROM sessions LIMIT 1")
         except sqlite3.OperationalError:
@@ -98,14 +142,15 @@ def save_drill_answers(session_id: str, answers: list[dict], *, user_id: str):
 
 
 def save_review(session_id: str, review: str, scores: list = None,
-                weak_points: list = None, overall: dict = None, *, user_id: str):
+                weak_points: list = None, overall: dict = None, auto_score: dict = None, *, user_id: str):
     conn = _get_conn()
     conn.execute(
-        "UPDATE sessions SET review = ?, scores = ?, weak_points = ?, overall = ?, updated_at = CURRENT_TIMESTAMP "
+        "UPDATE sessions SET review = ?, scores = ?, weak_points = ?, overall = ?, auto_score = ?, updated_at = CURRENT_TIMESTAMP "
         "WHERE session_id = ? AND user_id = ?",
         (review, json.dumps(scores or [], ensure_ascii=False),
          json.dumps(weak_points or [], ensure_ascii=False),
          json.dumps(overall or {}, ensure_ascii=False),
+         json.dumps(auto_score or {}, ensure_ascii=False),
          session_id, user_id),
     )
     conn.commit()
@@ -127,6 +172,7 @@ def get_session(session_id: str, *, user_id: str) -> dict | None:
     result["scores"] = json.loads(result["scores"])
     result["weak_points"] = json.loads(result["weak_points"])
     result["overall"] = json.loads(result.get("overall", "{}") or "{}")
+    result["auto_score"] = json.loads(result.get("auto_score", "{}") or "{}")
     return result
 
 
@@ -174,7 +220,7 @@ def list_sessions(
     ).fetchone()[0]
 
     rows = conn.execute(
-        f"SELECT session_id, mode, topic, created_at, overall FROM sessions "
+        f"SELECT session_id, mode, topic, created_at, overall, weak_points, scores FROM sessions "
         f"WHERE {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?",
         params + [limit, offset],
     ).fetchall()
@@ -183,12 +229,21 @@ def list_sessions(
     items = []
     for r in rows:
         overall = json.loads(r["overall"] or "{}")
+        weak_points = json.loads(r["weak_points"] or "[]")
+        scores = json.loads(r["scores"] or "[]")
+        targeting = (overall.get("targeting_stats") or {}) if isinstance(overall, dict) else {}
         items.append({
             "session_id": r["session_id"],
             "mode": r["mode"],
             "topic": r["topic"],
             "created_at": r["created_at"],
             "avg_score": overall.get("avg_score"),
+            "semantic_buckets": _collect_session_semantic_buckets(overall, weak_points, scores),
+            "focus_label": targeting.get("focus_label"),
+            "focus_keyword": targeting.get("focus_keyword"),
+            "focus_hit_count": targeting.get("focus_hit_count"),
+            "focus_hit_rate": targeting.get("focus_hit_rate"),
+            "front3_focus_hits": targeting.get("front3_focus_hits"),
         })
     return {"items": items, "total": total}
 

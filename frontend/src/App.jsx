@@ -1,19 +1,22 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Sidebar from "./components/Sidebar";
 import ErrorBoundary from "./components/ErrorBoundary";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import Home from "./pages/Home";
-import Interview from "./pages/Interview";
-import Review from "./pages/Review";
-import History from "./pages/History";
-import Profile from "./pages/Profile";
-import Knowledge from "./pages/Knowledge";
-import TopicDetail from "./pages/TopicDetail";
-import Graph from "./pages/Graph";
-import RecordingAnalysis from "./pages/RecordingAnalysis";
-import NotFound from "./pages/NotFound";
+
+const Landing = lazy(() => import("./pages/Landing"));
+const Login = lazy(() => import("./pages/Login"));
+const Home = lazy(() => import("./pages/Home"));
+const Interview = lazy(() => import("./pages/Interview"));
+const Review = lazy(() => import("./pages/Review"));
+const History = lazy(() => import("./pages/History"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Knowledge = lazy(() => import("./pages/Knowledge"));
+const TopicDetail = lazy(() => import("./pages/TopicDetail"));
+const Graph = lazy(() => import("./pages/Graph"));
+const RecordingAnalysis = lazy(() => import("./pages/RecordingAnalysis"));
+const Settings = lazy(() => import("./pages/Settings"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 function ProtectedRoute({ children }) {
   const { token, loading } = useAuth();
@@ -69,6 +72,7 @@ function AppRoutes() {
                 <Route path="/knowledge" element={<Knowledge />} />
                 <Route path="/graph" element={<Graph />} />
                 <Route path="/recording" element={<RecordingAnalysis />} />
+                <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AppShell>
@@ -84,7 +88,9 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <ErrorBoundary>
-          <AppRoutes />
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-sm text-dim">加载中...</div>}>
+            <AppRoutes />
+          </Suspense>
         </ErrorBoundary>
       </BrowserRouter>
     </AuthProvider>

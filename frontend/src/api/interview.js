@@ -39,6 +39,28 @@ export async function getTopics() {
   return res.json();
 }
 
+export async function getHealth() {
+  const res = await fetch(`${API_BASE}/health`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getAdminSettings() {
+  const res = await authFetch(`${API_BASE}/admin/settings`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function updateAdminSettings(payload) {
+  const res = await authFetch(`${API_BASE}/admin/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function createTopic(name, icon = "📝") {
   const res = await authFetch(`${API_BASE}/topics`, {
     method: "POST",
@@ -73,11 +95,16 @@ export async function uploadResume(file) {
   return res.json();
 }
 
-export async function startInterview(mode, topic = null) {
+export async function startInterview(mode, topic = null, focus = {}) {
   const res = await authFetch(`${API_BASE}/interview/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode, topic }),
+    body: JSON.stringify({
+      mode,
+      topic,
+      focus_keyword: focus.focusKeyword || "",
+      focus_label: focus.focusLabel || "",
+    }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -120,6 +147,16 @@ export async function getReferenceAnswer(topic, question) {
   return res.json();
 }
 
+export async function scoreInterviewAnswer(payload) {
+  const res = await authFetch(`${API_BASE}/interview/score`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function getHistory(limit = 20, offset = 0, mode = null, topic = null) {
   const params = new URLSearchParams({ limit, offset });
   if (mode) params.set("mode", mode);
@@ -153,6 +190,14 @@ export async function getGraphData(topic) {
 
 export async function getProfile() {
   const res = await authFetch(`${API_BASE}/profile`);
+  return res.json();
+}
+
+export async function resetProfile() {
+  const res = await authFetch(`${API_BASE}/profile`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
@@ -207,6 +252,16 @@ export async function createCoreKnowledge(topic, filename, content) {
 export async function generateKnowledge(topic) {
   const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/generate`, {
     method: "POST",
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getKnowledgeQueryHints(query) {
+  const res = await authFetch(`${API_BASE}/knowledge/query-hints`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

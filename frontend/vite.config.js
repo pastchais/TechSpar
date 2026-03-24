@@ -10,4 +10,23 @@ export default defineConfig({
       '/api': 'http://localhost:8000',
     },
   },
+  build: {
+    modulePreload: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('react-force-graph') || id.includes('d3-force') || id.includes('d3-') || id.includes('canvas-color-tracker')) {
+            return 'graph-vendor'
+          }
+          if (id.includes('react-markdown') || id.includes('remark-') || id.includes('rehype-')) {
+            return 'markdown-vendor'
+          }
+          if (id.includes('react-dom') || id.includes('/react/')) {
+            return 'react-vendor'
+          }
+        },
+      },
+    },
+  },
 })

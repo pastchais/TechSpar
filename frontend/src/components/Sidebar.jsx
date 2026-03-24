@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  Home, User, BookOpen, GitFork, Clock, Mic,
+  Home, User, BookOpen, GitFork, Clock, Mic, Settings as SettingsIcon,
   Sun, Moon, LogOut, Menu, X,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { path: "/graph", label: "图谱", icon: GitFork },
   { path: "/history", label: "历史记录", icon: Clock },
   { path: "/recording", label: "录音复盘", icon: Mic },
+  { path: "/settings", label: "设置", icon: SettingsIcon },
 ];
 
 export default function Sidebar() {
@@ -42,13 +43,15 @@ export default function Sidebar() {
   const nav = (
     <aside className="flex flex-col h-full w-[200px] bg-card border-r border-border">
       {/* Logo */}
-      <div
-        className="flex items-center gap-2.5 px-5 py-5 cursor-pointer shrink-0"
+      <button
+        type="button"
+        className="flex items-center gap-2.5 px-5 py-5 cursor-pointer shrink-0 text-left bg-transparent border-none"
         onClick={() => navigate("/")}
+        aria-label="返回首页"
       >
-        <img src="/logo.png" alt="TechSpar" className="w-7 h-7 rounded-lg object-contain" />
+        <img src="/favicon.svg" alt="TechSpar" className="w-7 h-7 rounded-lg object-contain" />
         <span className="text-base font-display font-bold text-text">TechSpar</span>
-      </div>
+      </button>
 
       {/* Nav links */}
       <nav className="flex-1 flex flex-col gap-0.5 px-3 overflow-y-auto">
@@ -99,10 +102,15 @@ export default function Sidebar() {
     <>
       {/* Mobile topbar */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 bg-card border-b border-border shrink-0">
-        <div className="flex items-center gap-2" onClick={() => navigate("/")}>
-          <img src="/logo.png" alt="TechSpar" className="w-7 h-7 rounded-lg object-contain" />
+        <button
+          type="button"
+          className="flex items-center gap-2 bg-transparent border-none p-0 text-left"
+          onClick={() => navigate("/")}
+          aria-label="返回首页"
+        >
+          <img src="/favicon.svg" alt="TechSpar" className="w-7 h-7 rounded-lg object-contain" />
           <span className="text-base font-display font-bold text-text">TechSpar</span>
-        </div>
+        </button>
         <button
           onClick={() => setOpen(o => !o)}
           className="w-9 h-9 rounded-lg bg-hover border border-border flex items-center justify-center"
@@ -121,9 +129,11 @@ export default function Sidebar() {
       {open && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div className="animate-fade-in">{nav}</div>
-          <div
-            className="flex-1 bg-black/50"
+          <button
+            type="button"
+            className="flex-1 bg-black/50 border-none p-0"
             onClick={() => setOpen(false)}
+            aria-label="关闭侧边栏"
           />
         </div>
       )}

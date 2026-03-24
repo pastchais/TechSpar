@@ -1,8 +1,11 @@
 from pathlib import Path
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    env: str = "development"
+
     # LLM (OpenAI-compatible proxy)
     api_base: str = ""
     api_key: str = ""
@@ -36,6 +39,16 @@ class Settings(BaseSettings):
     default_password: str = "admin123"
     default_name: str = "Admin"
     allow_registration: bool = False
+
+    # Security / deployment
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"])
+    trust_proxy_headers: bool = True
+    public_base_url: str = ""
+    upload_max_mb: int = 20
+
+    # Evaluation reliability
+    min_confidence_to_persist: float = 0.6
+    weak_point_promote_threshold: int = 2
 
     # Interview settings
     max_questions_per_phase: int = 5

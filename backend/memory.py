@@ -15,6 +15,8 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from backend.config import settings
 from backend.llm_provider import get_langchain_llm
+from backend.schemas_eval import normalize_extraction_payload, normalize_point_text, canonicalize_topic_key
+from backend.query_hints import build_query_hints
 
 logger = logging.getLogger("uvicorn")
 
@@ -147,6 +149,262 @@ def _save_profile(profile: dict, user_id: str):
     )
 
 
+def _normalize_weak_point_meta(point: str | None) -> dict:
+    hints = build_query_hints(point)
+    aliases = [x for x in (hints.get("aliases") or []) if x]
+    canonical = hints.get("canonical_query") or normalize_point_text(point)
+    buckets = [x for x in (hints.get("semantic_buckets") or []) if x]
+    return {
+        "canonical_query": canonical,
+        "aliases": aliases[:12],
+        "semantic_bucket": hints.get("semantic_bucket") or (buckets[0] if len(buckets) == 1 else None),
+        "semantic_buckets": buckets[:6],
+    }
+
+
+def _bucket_label(bucket: str | None) -> str:
+    labels = {
+        "spring_transaction": "事务",
+        "spring_aop": "AOP",
+        "spring_ioc_di": "IOC/DI",
+        "spring_circular_dependency": "循环依赖",
+        "spring_startup": "Spring 启动",
+        "mysql_lock": "MySQL 锁",
+        "mysql_mvcc_txn": "MVCC/隔离",
+        "mysql_index_sql": "索引/SQL",
+        "redis_cache_consistency": "缓存一致性",
+        "redis_breakdown": "缓存异常",
+        "mq_core": "MQ",
+        "mq_reliability": "MQ 可靠性",
+        "java_concurrency": "并发",
+        "jvm_runtime": "JVM",
+        "microservice_governance": "微服务治理",
+        "distributed_ai": "AI/RAG",
+    }
+    return labels.get(bucket or "", bucket or "")
+
+
+def _build_next_focus_recommendation(wp: dict) -> dict | None:
+    candidates = [x for x in (wp.get("focus_effectiveness") or []) if isinstance(x, dict)]
+    priority_score = float(wp.get("priority_score", 0.0) or 0.0)
+    adaptive_strategy = wp.get("adaptive_strategy") or "stabilize"
+    semantic_buckets = [x for x in (wp.get("semantic_buckets") or []) if x]
+    semantic_bucket = wp.get("semantic_bucket")
+
+    if candidates:
+        ranked = []
+        for item in candidates:
+            hit_rate = float(item.get("focus_hit_rate", 0.0) or 0.0)
+            improvement_rate = float(item.get("improvement_rate", 0.0) or 0.0)
+            attempts = int(item.get("attempts", 0) or 0)
+            front3 = min(int(item.get("last_front3_focus_hits", 0) or 0), 3)
+            score = priority_score * 0.08 + hit_rate * 35 + improvement_rate * 30 + min(attempts, 4) * 3 + front3 * 4
+            if adaptive_strategy == "repair":
+                score += 8
+            elif adaptive_strategy == "advance":
+                score -= 4
+            ranked.append((score, item))
+        ranked.sort(key=lambda x: x[0], reverse=True)
+        best_score, best = ranked[0]
+        reason_bits = []
+        if adaptive_strategy == "repair":
+            reason_bits.append("当前处于 repair 阶段，优先选择更聚焦的修复入口")
+        elif adaptive_strategy == "stabilize":
+            reason_bits.append("当前更适合用命中率高的 focus 做稳定性验证")
+        else:
+            reason_bits.append("当前可用已有高命中 focus 做验收型训练")
+        if best.get("focus_hit_rate") is not None:
+            reason_bits.append(f"该 focus 历史命中率 {(float(best.get('focus_hit_rate', 0.0)) * 100):.0f}%")
+        if best.get("improvement_rate") is not None:
+            reason_bits.append(f"回升率 {(float(best.get('improvement_rate', 0.0)) * 100):.0f}%")
+        if best.get("last_front3_focus_hits"):
+            reason_bits.append(f"最近一轮前3题命中 {int(best.get('last_front3_focus_hits', 0) or 0)} 次")
+        return {
+            "focus_label": best.get("focus_label"),
+            "focus_keyword": best.get("focus_keyword") or best.get("focus_label"),
+            "source": "focus_effectiveness",
+            "score": round(best_score, 1),
+            "confidence": "high" if (float(best.get("focus_hit_rate", 0.0) or 0.0) >= 0.7 or int(best.get("attempts", 0) or 0) >= 2) else "medium",
+            "reason": "；".join(reason_bits),
+            "topic_level": bool(best.get("topic_level", False)),
+        }
+
+    if semantic_buckets or semantic_bucket:
+        buckets = semantic_buckets or ([semantic_bucket] if semantic_bucket else [])
+        label = " + ".join(_bucket_label(x) for x in buckets[:2] if x).strip()
+        if label:
+            return {
+                "focus_label": label,
+                "focus_keyword": wp.get("canonical_query") or wp.get("point") or label,
+                "source": "semantic_bucket",
+                "score": round(priority_score * 1.5 + (8 if adaptive_strategy == "repair" else 0), 1),
+                "confidence": "medium",
+                "reason": f"该薄弱点还没有稳定的 focus 历史，先按语义桶 {label} 收敛到更具体的问题边界。",
+                "topic_level": True,
+            }
+
+    point_text = wp.get("point") or wp.get("canonical_query")
+    if point_text:
+        return {
+            "focus_label": point_text[:48],
+            "focus_keyword": wp.get("canonical_query") or point_text,
+            "source": "weak_point",
+            "score": round(priority_score, 1),
+            "confidence": "low",
+            "reason": "当前还缺少稳定的 focus 历史，先围绕这个薄弱点本身做一次定向 drill。",
+            "topic_level": True,
+        }
+    return None
+
+
+def _build_mini_training_plan(profile: dict) -> list[dict]:
+    recommendations = [x for x in (profile.get("next_focus_recommendations") or []) if isinstance(x, dict)]
+    plan = []
+    for idx, rec in enumerate(recommendations[:3], start=1):
+        adaptive_strategy = rec.get("adaptive_strategy") or "stabilize"
+        if adaptive_strategy == "repair":
+            success_rule = "若本轮 focus 命中率 >= 70% 且至少 1 题回答明显回升，再继续同类 repair；否则先去知识库补概念边界。"
+        elif adaptive_strategy == "advance":
+            success_rule = "若回答已稳定 >= 7.5，可切到更难 follow-up / 场景题；否则继续用当前 focus 做一次验收。"
+        else:
+            success_rule = "若前3题仍高命中且回答更稳定，可继续同 focus；若命中高但分数不升，说明需要先补知识点再练。"
+        knowledge_keyword = rec.get("focus_label") or rec.get("focus_keyword") or rec.get("point")
+        plan.append({
+            "step": idx,
+            "title": f"先练 {rec.get('focus_label') or rec.get('point')}",
+            "topic": rec.get("topic"),
+            "focus_label": rec.get("focus_label"),
+            "focus_keyword": rec.get("focus_keyword") or rec.get("focus_label"),
+            "weak_point": rec.get("point"),
+            "why_now": rec.get("reason"),
+            "pre_read_keyword": knowledge_keyword,
+            "success_rule": success_rule,
+            "confidence": rec.get("confidence"),
+            "adaptive_strategy": adaptive_strategy,
+            "score": rec.get("score"),
+        })
+    return plan
+
+
+def _refresh_weak_point_aggregates(profile: dict):
+    weak_points = profile.get("weak_points", [])
+    for wp in weak_points:
+        point = normalize_point_text(wp.get("point"))
+        if point:
+            wp["point"] = point
+            meta = _normalize_weak_point_meta(point)
+            wp.setdefault("canonical_query", meta["canonical_query"])
+            wp.setdefault("aliases", meta["aliases"])
+            wp.setdefault("semantic_bucket", meta["semantic_bucket"])
+            wp.setdefault("semantic_buckets", meta["semantic_buckets"])
+        history = [x for x in (wp.get("score_history") or []) if isinstance(x, dict)]
+        recent_scores = [float(x.get("score", 0)) for x in history if isinstance(x.get("score"), (int, float))]
+        if recent_scores:
+            wp["last_score"] = recent_scores[-1]
+            wp["avg_recent_score"] = round(sum(recent_scores[-5:]) / min(len(recent_scores), 5), 1)
+        wp["review_count"] = max(int(wp.get("review_count", 0) or 0), len(history))
+        if len(recent_scores) >= 3 and min(recent_scores[-3:]) >= 7.5 and not wp.get("improved"):
+            wp["improved"] = True
+            wp["improved_reason"] = wp.get("improved_reason") or "最近连续 3 次相关得分均 >= 7.5"
+            wp["improved_at"] = wp.get("improved_at") or datetime.now().isoformat()
+
+        repair_attempts = int(wp.get("repair_attempts", 0) or 0)
+        repair_success_rate = float(wp.get("repair_success_rate", 0.0) or 0.0)
+        recent_low_streak = int(wp.get("recent_low_streak", 0) or 0)
+        avg_recent_score = wp.get("avg_recent_score")
+        last_score = wp.get("last_score")
+
+        existing_focus_effectiveness = [x for x in (wp.get("focus_effectiveness") or []) if isinstance(x, dict)]
+        focus_effectiveness = []
+        focus_stats = {}
+        for item in existing_focus_effectiveness:
+            label = str(item.get("focus_label") or "").strip()
+            if not label:
+                continue
+            focus_stats[label] = {
+                "focus_label": label,
+                "focus_keyword": item.get("focus_keyword") or label,
+                "attempts": int(item.get("attempts", 0) or 0),
+                "focus_hits": int(item.get("focus_hit_count", 0) or 0),
+                "improved_count": int(item.get("improved_count", 0) or 0),
+                "scores": [],
+                "topic_level": bool(item.get("topic_level", False)),
+                "last_front3_focus_hits": item.get("last_front3_focus_hits", 0),
+            }
+        for item in [x for x in (wp.get("repair_history") or []) if isinstance(x, dict)]:
+            label = str(item.get("focus_label") or "").strip()
+            if not label:
+                continue
+            stat = focus_stats.setdefault(label, {
+                "focus_label": label,
+                "focus_keyword": item.get("focus_keyword") or label,
+                "attempts": 0,
+                "focus_hits": 0,
+                "improved_count": 0,
+                "scores": [],
+            })
+            stat["attempts"] += 1
+            if item.get("focus_hit"):
+                stat["focus_hits"] += 1
+            if item.get("improved"):
+                stat["improved_count"] += 1
+            if isinstance(item.get("score_10"), (int, float)):
+                stat["scores"].append(float(item.get("score_10")))
+        for stat in focus_stats.values():
+            attempts = max(int(stat["attempts"]), 1)
+            avg_score = round(sum(stat["scores"]) / len(stat["scores"]), 1) if stat["scores"] else None
+            focus_effectiveness.append({
+                "focus_label": stat["focus_label"],
+                "focus_keyword": stat["focus_keyword"],
+                "attempts": stat["attempts"],
+                "focus_hit_count": stat["focus_hits"],
+                "focus_hit_rate": round(stat["focus_hits"] / attempts, 2),
+                "improved_count": stat["improved_count"],
+                "improvement_rate": round(stat["improved_count"] / attempts, 2),
+                "avg_score": avg_score,
+                "topic_level": bool(stat.get("topic_level", False)),
+                "last_front3_focus_hits": stat.get("last_front3_focus_hits", 0),
+            })
+        focus_effectiveness.sort(key=lambda x: (-x.get("improvement_rate", 0), -x.get("focus_hit_rate", 0), -(x.get("attempts", 0))))
+        wp["focus_effectiveness"] = focus_effectiveness[:5]
+        wp["best_focus"] = focus_effectiveness[0] if focus_effectiveness else None
+
+        priority_score = 0.0
+        priority_score += min(recent_low_streak, 5) * 3.0
+        priority_score += max(0.0, 6.0 - float(last_score if last_score is not None else 5.0)) * 1.6
+        priority_score += min(int(wp.get("times_seen", 1) or 1), 6) * 0.7
+        priority_score += max(0.0, 7.5 - float(avg_recent_score if avg_recent_score is not None else 7.5)) * 0.9
+
+        if recent_low_streak >= 2 or (repair_attempts >= 2 and repair_success_rate < 0.4):
+            adaptive_strategy = "repair"
+        elif repair_attempts >= 2 and repair_success_rate >= 0.75 and (avg_recent_score is not None and float(avg_recent_score) >= 7.5):
+            adaptive_strategy = "advance"
+        else:
+            adaptive_strategy = "stabilize"
+
+        wp["priority_score"] = round(priority_score, 2)
+        wp["adaptive_strategy"] = adaptive_strategy
+        wp["next_focus_recommendation"] = _build_next_focus_recommendation(wp)
+
+    recommendations = []
+    for wp in weak_points:
+        if wp.get("improved"):
+            continue
+        rec = wp.get("next_focus_recommendation")
+        if not rec:
+            continue
+        recommendations.append({
+            "point": wp.get("point"),
+            "topic": wp.get("topic"),
+            "priority_score": wp.get("priority_score", 0),
+            "adaptive_strategy": wp.get("adaptive_strategy"),
+            **rec,
+        })
+    recommendations.sort(key=lambda x: (-float(x.get("score", 0) or 0), -float(x.get("priority_score", 0) or 0)))
+    profile["next_focus_recommendations"] = recommendations[:5]
+    profile["mini_training_plan"] = _build_mini_training_plan(profile)
+
+
 def _save_insight(mode: str, topic: str, summary: str, raw_extraction: dict, user_id: str):
     """Append daily insight file (OpenClaw-style daily log)."""
     ins_dir = _insights_dir(user_id)
@@ -174,23 +432,60 @@ def _save_insight(mode: str, topic: str, summary: str, raw_extraction: dict, use
 
 
 def get_profile(user_id: str) -> dict:
-    return _load_profile(user_id)
+    profile = _load_profile(user_id)
+    _refresh_weak_point_aggregates(profile)
+    return profile
 
 
 def get_topic_context_for_drill(topic: str, user_id: str) -> dict:
     """Get personalized context for drill question generation."""
     profile = _load_profile(user_id)
+    _refresh_weak_point_aggregates(profile)
 
     mastery = profile.get("topic_mastery", {}).get(topic, {})
     mastery_score = mastery.get("score", mastery.get("level", 0) * 20)
     mastery_notes = mastery.get("notes", "新领域，暂无历史数据" if mastery_score == 0 else "")
     mastery_info = f"{mastery_score}/100 — {mastery_notes}"
 
-    # Weak points for this topic
-    topic_weak = [
-        w["point"] for w in profile.get("weak_points", [])
-        if w.get("topic") == topic and not w.get("improved")
-    ]
+    # Weak points for this topic — keep priority metadata for question weighting
+    topic_weak_points = []
+    for w in profile.get("weak_points", []):
+        if w.get("topic") != topic or w.get("improved"):
+            continue
+        score = 0.0
+        score += min(int(w.get("recent_low_streak", 0) or 0), 5) * 3.0
+        score += max(0.0, 6.0 - float(w.get("last_score", 5.0) or 5.0)) * 1.6
+        score += min(int(w.get("times_seen", 1) or 1), 6) * 0.7
+        score += max(0.0, 7.5 - float(w.get("avg_recent_score", 7.5) or 7.5)) * 0.9
+        repair_attempts = int(w.get("repair_attempts", 0) or 0)
+        repair_success_rate = float(w.get("repair_success_rate", 0.0) or 0.0)
+        recent_low_streak = int(w.get("recent_low_streak", 0) or 0)
+        avg_recent_score = w.get("avg_recent_score")
+
+        if recent_low_streak >= 2 or (repair_attempts >= 2 and repair_success_rate < 0.4):
+            adaptive_strategy = "repair"
+        elif repair_attempts >= 2 and repair_success_rate >= 0.75 and (avg_recent_score is not None and float(avg_recent_score) >= 7.5):
+            adaptive_strategy = "advance"
+        else:
+            adaptive_strategy = "stabilize"
+
+        topic_weak_points.append({
+            "point": w.get("point", ""),
+            "canonical_query": w.get("canonical_query") or w.get("point", ""),
+            "aliases": list(w.get("aliases") or []),
+            "semantic_bucket": w.get("semantic_bucket"),
+            "semantic_buckets": list(w.get("semantic_buckets") or []),
+            "priority_score": round(score, 2),
+            "times_seen": int(w.get("times_seen", 1) or 1),
+            "recent_low_streak": recent_low_streak,
+            "last_score": w.get("last_score"),
+            "avg_recent_score": avg_recent_score,
+            "repair_attempts": repair_attempts,
+            "repair_success_rate": repair_success_rate,
+            "adaptive_strategy": adaptive_strategy,
+        })
+    topic_weak_points.sort(key=lambda x: (-x.get("priority_score", 0), -x.get("times_seen", 0)))
+    topic_weak = [w["point"] for w in topic_weak_points]
 
     # Recent questions from score_history for this topic
     recent_questions = [
@@ -218,6 +513,7 @@ def get_topic_context_for_drill(topic: str, user_id: str) -> dict:
         "mastery_info": mastery_info,
         "mastery_score": mastery_score,
         "weak_points": topic_weak,
+        "weak_point_details": topic_weak_points,
         "recent_questions": recent_questions,
         "past_insights": past_insights,
     }
@@ -257,7 +553,13 @@ def update_profile_realtime(
         if match_idx is not None:
             profile["weak_points"][match_idx]["times_seen"] = profile["weak_points"][match_idx].get("times_seen", 1) + 1
             profile["weak_points"][match_idx]["last_seen"] = now
+            meta = _normalize_weak_point_meta(profile["weak_points"][match_idx].get("point"))
+            profile["weak_points"][match_idx]["canonical_query"] = meta["canonical_query"]
+            profile["weak_points"][match_idx]["aliases"] = meta["aliases"]
+            profile["weak_points"][match_idx]["semantic_bucket"] = meta["semantic_bucket"]
+            profile["weak_points"][match_idx]["semantic_buckets"] = meta["semantic_buckets"]
         else:
+            meta = _normalize_weak_point_meta(weak_point)
             profile.setdefault("weak_points", []).append({
                 "point": weak_point,
                 "topic": topic or "",
@@ -265,6 +567,10 @@ def update_profile_realtime(
                 "last_seen": now,
                 "times_seen": 1,
                 "improved": False,
+                "canonical_query": meta["canonical_query"],
+                "aliases": meta["aliases"],
+                "semantic_bucket": meta["semantic_bucket"],
+                "semantic_buckets": meta["semantic_buckets"],
             })
 
     # Track that we have activity (for profile page display)
@@ -360,22 +666,34 @@ def _parse_json_safe(content: str) -> dict | list:
 def _apply_memory_ops(profile: dict, ops: dict, topic: str | None, now: str):
     """Execute LLM-decided ADD/UPDATE/NOOP/IMPROVE operations on profile."""
     weak_points = profile.setdefault("weak_points", [])
+    topic = canonicalize_topic_key(topic)
 
     for op in ops.get("weak_point_ops", []):
         action = op.get("action", "NOOP")
         if action == "ADD":
+            point = normalize_point_text(op.get("point"))
+            if not point:
+                continue
+            meta = _normalize_weak_point_meta(point)
             weak_points.append({
-                "point": op["point"],
-                "topic": op.get("topic", topic or ""),
+                "point": point,
+                "topic": canonicalize_topic_key(op.get("topic", topic or "")),
                 "first_seen": now, "last_seen": now,
                 "times_seen": 1, "improved": False,
+                "canonical_query": meta["canonical_query"],
+                "aliases": meta["aliases"],
+                "semantic_bucket": meta["semantic_bucket"],
+                "semantic_buckets": meta["semantic_buckets"],
             })
         elif action == "UPDATE":
             idx = op.get("index")
             if idx is not None and 0 <= idx < len(weak_points):
                 wp = weak_points[idx]
                 if op.get("new_point"):
-                    wp["point"] = op["new_point"]
+                    wp["point"] = normalize_point_text(op["new_point"])
+                meta = _normalize_weak_point_meta(wp.get("point"))
+                wp["canonical_query"] = meta["canonical_query"]
+                wp["aliases"] = meta["aliases"]
                 wp["times_seen"] = wp.get("times_seen", 1) + 1
                 wp["last_seen"] = now
 
@@ -387,10 +705,11 @@ def _apply_memory_ops(profile: dict, ops: dict, topic: str | None, now: str):
 
     existing_strong = {s["point"] for s in profile.get("strong_points", [])}
     for op in ops.get("strong_point_ops", []):
-        if op.get("action") == "ADD" and op.get("point") and op["point"] not in existing_strong:
+        point = normalize_point_text(op.get("point"))
+        if op.get("action") == "ADD" and point and point not in existing_strong:
             profile.setdefault("strong_points", []).append({
-                "point": op["point"],
-                "topic": op.get("topic", topic or ""),
+                "point": point,
+                "topic": canonicalize_topic_key(op.get("topic", topic or "")),
                 "first_seen": now,
             })
 
@@ -400,24 +719,41 @@ def _deterministic_update(profile: dict, new_weak: list, new_strong: list,
     """Fallback: vector cosine dedup when LLM parse fails."""
     from backend.vector_memory import find_similar_weak_point
 
+    topic = canonicalize_topic_key(topic)
+
     for wp in new_weak:
-        point = wp.get("point", wp) if isinstance(wp, dict) else str(wp)
+        point = normalize_point_text(wp.get("point", wp) if isinstance(wp, dict) else str(wp))
+        if not point:
+            continue
         match_idx = find_similar_weak_point(point, profile.get("weak_points", []), user_id=user_id)
         if match_idx is not None:
             profile["weak_points"][match_idx]["times_seen"] = profile["weak_points"][match_idx].get("times_seen", 1) + 1
             profile["weak_points"][match_idx]["last_seen"] = now
+            meta = _normalize_weak_point_meta(profile["weak_points"][match_idx].get("point"))
+            profile["weak_points"][match_idx]["canonical_query"] = meta["canonical_query"]
+            profile["weak_points"][match_idx]["aliases"] = meta["aliases"]
+            profile["weak_points"][match_idx]["semantic_bucket"] = meta["semantic_bucket"]
+            profile["weak_points"][match_idx]["semantic_buckets"] = meta["semantic_buckets"]
         else:
+            meta = _normalize_weak_point_meta(point)
             profile.setdefault("weak_points", []).append({
                 "point": point,
-                "topic": wp.get("topic", topic) if isinstance(wp, dict) else (topic or ""),
+                "topic": canonicalize_topic_key(wp.get("topic", topic) if isinstance(wp, dict) else (topic or "")),
                 "first_seen": now, "last_seen": now,
                 "times_seen": 1, "improved": False,
+                "canonical_query": meta["canonical_query"],
+                "aliases": meta["aliases"],
+                "semantic_bucket": meta["semantic_bucket"],
+                "semantic_buckets": meta["semantic_buckets"],
             })
 
     for sp in new_strong:
-        sp_text = sp.get("point", sp) if isinstance(sp, dict) else str(sp)
+        sp_text = normalize_point_text(sp.get("point", sp) if isinstance(sp, dict) else str(sp))
+        if not sp_text:
+            continue
+        strong_topic = canonicalize_topic_key(sp.get("topic") if isinstance(sp, dict) else topic)
         for w in profile.get("weak_points", []):
-            if w.get("topic") == (sp.get("topic") if isinstance(sp, dict) else topic) and not w.get("improved"):
+            if w.get("topic") == strong_topic and not w.get("improved"):
                 w["improved"] = True
                 w["improved_at"] = now
                 break
@@ -425,7 +761,7 @@ def _deterministic_update(profile: dict, new_weak: list, new_strong: list,
         if sp_text not in existing:
             profile.setdefault("strong_points", []).append({
                 "point": sp_text,
-                "topic": sp.get("topic") if isinstance(sp, dict) else (topic or ""),
+                "topic": strong_topic,
                 "first_seen": now,
             })
 
@@ -539,6 +875,7 @@ async def llm_update_profile(
     answer_count: int = 0,
     session_weight: float = 0.7,
     dimension_scores: dict | None = None,
+    extraction_confidence: float = 0.7,
 ):
     """Mem0-style profile update: LLM decides ADD/UPDATE/NOOP for each fact."""
     from backend.prompts.interviewer import PROFILE_UPDATE_PROMPT
@@ -546,10 +883,11 @@ async def llm_update_profile(
     profile = _load_profile(user_id)
     now = datetime.now().isoformat()
 
+    topic = canonicalize_topic_key(topic)
     # ── LLM-based update for weak/strong points ──
     has_new_facts = bool(new_weak_points or new_strong_points)
 
-    if has_new_facts:
+    if has_new_facts and extraction_confidence >= settings.min_confidence_to_persist:
         # Format existing points with indices for LLM reference
         existing_weak_lines = []
         for i, wp in enumerate(profile.get("weak_points", [])):
@@ -596,27 +934,34 @@ async def llm_update_profile(
             _deterministic_update(profile, new_weak_points, new_strong_points, topic, now, user_id)
 
     # ── Deterministic updates for mastery / communication / thinking / stats ──
-    _update_mastery(profile, topic, topic_mastery, now, session_weight)
+    filtered_mastery = {}
+    if extraction_confidence >= settings.min_confidence_to_persist:
+        filtered_mastery = topic_mastery
+    _update_mastery(profile, topic, filtered_mastery, now, session_weight)
     _update_communication(profile, communication)
     _update_thinking_patterns(profile, thinking_patterns)
     _update_stats(profile, mode, topic, avg_score, now, answer_count, dimension_scores)
 
+    _refresh_weak_point_aggregates(profile)
     _save_profile(profile, user_id)
     _save_insight(mode=mode, topic=topic, summary=session_summary, raw_extraction={
         "weak_points": new_weak_points,
         "strong_points": new_strong_points,
     }, user_id=user_id)
 
-    # Index into vector memory for future semantic retrieval
-    from backend.vector_memory import index_session_memory
-    index_session_memory(
-        session_id=None, topic=topic,
-        summary=session_summary,
-        weak_points=new_weak_points,
-        strong_points=new_strong_points,
-        insight_text=session_summary,
-        user_id=user_id,
-    )
+    # Index into vector memory for future semantic retrieval (best effort)
+    try:
+        from backend.vector_memory import index_session_memory
+        index_session_memory(
+            session_id=None, topic=topic,
+            summary=session_summary,
+            weak_points=new_weak_points,
+            strong_points=new_strong_points,
+            insight_text=session_summary,
+            user_id=user_id,
+        )
+    except Exception as e:
+        logger.warning(f"index_session_memory skipped: {e}")
 
 
 async def update_profile_after_interview(
@@ -666,23 +1011,24 @@ async def update_profile_after_interview(
             if content.startswith("json"):
                 content = content[4:]
             content = content.strip()
-        extraction = json.loads(content)
-    except (json.JSONDecodeError, IndexError):
-        extraction = {"session_summary": "提取失败", "weak_points": [], "strong_points": []}
+        extraction = normalize_extraction_payload(json.loads(content), topic)
+    except (json.JSONDecodeError, IndexError, Exception):
+        extraction = normalize_extraction_payload({"session_summary": "提取失败", "weak_points": [], "strong_points": [], "confidence": 0.0}, topic)
 
     # ── Stage 2: LLM-based Update (Mem0 style) ──
     await llm_update_profile(
         mode=mode,
         topic=topic,
-        new_weak_points=extraction.get("weak_points", []),
-        new_strong_points=extraction.get("strong_points", []),
-        topic_mastery=extraction.get("topic_mastery", {}),
-        communication=extraction.get("communication_observations", {}),
+        new_weak_points=[w.model_dump() for w in extraction.weak_points],
+        new_strong_points=[s.model_dump() for s in extraction.strong_points],
+        topic_mastery=extraction.topic_mastery if isinstance(extraction.topic_mastery, dict) else {},
+        communication=extraction.communication_observations.model_dump(),
         user_id=user_id,
-        thinking_patterns=extraction.get("thinking_patterns"),
-        session_summary=extraction.get("session_summary", ""),
-        avg_score=extraction.get("avg_score"),
-        dimension_scores=extraction.get("dimension_scores"),
+        thinking_patterns=extraction.thinking_patterns.model_dump(),
+        session_summary=extraction.session_summary,
+        avg_score=extraction.avg_score,
+        dimension_scores=extraction.dimension_scores.model_dump() if extraction.dimension_scores else None,
+        extraction_confidence=extraction.confidence,
     )
 
-    return extraction
+    return extraction.model_dump()

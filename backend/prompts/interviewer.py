@@ -127,7 +127,7 @@ DIFFICULTY_ROUTER_PROMPT = """评估候选人的回答质量。
 4. assessment: 一句自然的点评
 
 返回 JSON:
-{{"score": 8, "next_difficulty": 4, "weak_point": null, "assessment": "理解到位，能用自己的话说清楚原理"}}
+{{"score": 8, "next_difficulty": 4, "weak_point": null, "assessment": "理解到位，能用自己的话说清楚原理", "confidence": 0.82}}
 """
 
 
@@ -147,6 +147,12 @@ DRILL_QUESTION_GEN_PROMPT = """你是「{topic_name}」领域的技术专家，�
 ## 已知薄弱点（优先考察）
 {weak_points}
 
+## 高优先级薄弱点（必须优先覆盖，优先级高于普通薄弱点）
+{priority_weak_points}
+
+## 每个高优先级 weak point 的自适应训练策略
+{adaptive_focus_strategy}
+
 ## 高频面试题（用户标记的高频考点，优先覆盖）
 {high_freq_questions}
 
@@ -165,7 +171,13 @@ DRILL_QUESTION_GEN_PROMPT = """你是「{topic_name}」领域的技术专家，�
 ## 规则
 - 知识库只是参考范围，你要自己设计问题。绝对不能出"请解释第N个核心概念"这种题
 - 概念题也要考理解而非背诵——问"为什么这样设计"而非"请背诵定义"
-- 前 3 题针对已知薄弱点（如有），后面逐步拓展到其他知识点
+- 前 3 题优先覆盖“高优先级薄弱点”；如果存在到期复习点，至少前 2 题必须覆盖其中 1-2 个
+- 必须遵守每个高优先级 weak point 后面给出的 `strategy`：
+  - repair: 先概念澄清、why、单点应用，不要直接上复杂系统设计
+  - stabilize: 出中等难度追问题、场景变体题、边界条件题
+  - advance: 仅保留少量验收题，更多拓展到更高阶或相邻知识点
+- 若同一个薄弱点出现频次高、连续低分高，优先围绕该点出不同角度的题，但不要重复同一道题
+- 后面题目再逐步拓展到其他知识点，避免 10 题都只围绕一个点
 - 难度从 {diff_min} 到 {diff_max} 递进
 - 不要跟最近练过的题重复或高度相似
 - 每题一个独立知识点，不要一题考多个概念
@@ -192,6 +204,7 @@ DRILL_BATCH_EVAL_PROMPT = """你是「{topic_name}」领域的技术专家，正
 返回 JSON（只返回 JSON，不要其他内容）：
 ```json
 {{
+    "confidence": 0.82,
     "scores": [
         {{
             "question_id": 1,
@@ -206,6 +219,7 @@ DRILL_BATCH_EVAL_PROMPT = """你是「{topic_name}」领域的技术专家，正
     "overall": {{
         "avg_score": 6.5,
         "summary": "整体表现的一段话评价",
+        "confidence": 0.82,
         "new_weak_points": [{{"point": "具体薄弱点描述", "topic": "{topic_key}"}}],
         "new_strong_points": [{{"point": "具体强项描述", "topic": "{topic_key}"}}],
         "communication_observations": {{

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, Sparkles, ChevronRight, ChevronDown } from "lucide-react";
 import { getTopicIcon, ICON_OPTIONS } from "../utils/topicIcons";
 import {
@@ -12,13 +13,103 @@ import {
   createTopic,
   deleteTopic,
   generateKnowledge,
+  getKnowledgeQueryHints,
 } from "../api/interview";
 
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findFirstMatchIndex(content, terms) {
+  const lower = (content || "").toLowerCase();
+  let best = -1;
+  for (const term of terms) {
+    const idx = lower.indexOf(String(term).toLowerCase());
+    if (idx >= 0 && (best < 0 || idx < best)) best = idx;
+  }
+  return best;
+}
+
+function getMatchPreview(content, terms, radius = 60) {
+  if (!terms?.length || !content) return "";
+  const idx = findFirstMatchIndex(content, terms);
+  if (idx < 0) return "";
+  const primary = terms.find((t) => content.toLowerCase().includes(String(t).toLowerCase())) || terms[0];
+  const start = Math.max(0, idx - radius);
+  const end = Math.min(content.length, idx + String(primary).length + radius);
+  return `${start > 0 ? "..." : ""}${content.slice(start, end).replace(/\n+/g, " ")}${end < content.length ? "..." : ""}`;
+}
+
+function HighlightText({ text, terms, className = "" }) {
+  if (!text) return null;
+  if (!terms?.length) return <span className={className}>{text}</span>;
+  const pattern = terms
+    .slice()
+    .sort((a, b) => String(b).length - String(a).length)
+    .map((t) => escapeRegExp(String(t)))
+    .join("|");
+  const splitRegex = new RegExp(`(${pattern})`, "ig");
+  const matchRegex = new RegExp(`^(?:${pattern})$`, "i");
+  const parts = String(text).split(splitRegex);
+  return (
+    <span className={className}>
+      {parts.map((part, idx) => (
+        matchRegex.test(part)
+          ? <mark key={idx} className="bg-accent/20 text-accent-light px-0.5 rounded">{part}</mark>
+          : <span key={idx}>{part}</span>
+      ))}
+    </span>
+  );
+}
+
+function scoreKnowledgeFile(file, aliases, semanticBucket, semanticBucketTerms = [], semanticBucketDocHints = []) {
+  const filename = String(file?.filename || "").toLowerCase();
+  const content = String(file?.content || "").toLowerCase();
+  let score = 0;
+  let reason = "";
+
+  const aliasTerms = (aliases || []).map((t) => String(t).toLowerCase()).filter(Boolean);
+  const strongHits = aliasTerms.filter((term) => filename.includes(term));
+  const contentHits = aliasTerms.filter((term) => content.includes(term));
+
+  if (strongHits.length) {
+    score += 10 + strongHits.length * 3;
+    reason = "文件名直接命中语义关键词";
+  }
+  if (contentHits.length) {
+    score += 6 + Math.min(contentHits.length, 4) * 2;
+    if (!reason) reason = "正文命中语义关键词";
+  }
+
+  const bucketMatched = (semanticBucketTerms || []).some((term) => filename.includes(String(term).toLowerCase()) || content.includes(String(term).toLowerCase()));
+  if (bucketMatched) {
+    score += 8;
+    if (!reason) reason = semanticBucket ? "命中当前 semantic bucket" : "命中组合 semantic buckets";
+  }
+
+  const docHintHit = (semanticBucketDocHints || []).find((hint) => filename.includes(String(hint).toLowerCase()));
+  if (docHintHit) {
+    score += 14;
+    reason = semanticBucket ? "命中该 bucket 的优先推荐文档" : "命中组合 buckets 的优先推荐文档";
+  }
+
+  return { score, reason };
+}
+
 export default function Knowledge() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [topics, setTopics] = useState({});
   const [selected, setSelected] = useState(null);
   const [tab, setTab] = useState("core");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchAliases, setSearchAliases] = useState([]);
+  const [searchBucket, setSearchBucket] = useState("");
+  const [searchBucketLabel, setSearchBucketLabel] = useState("");
+  const [searchBucketLabels, setSearchBucketLabels] = useState([]);
+  const [searchBucketTerms, setSearchBucketTerms] = useState([]);
+  const [searchBucketDocHints, setSearchBucketDocHints] = useState([]);
 
   const [coreFiles, setCoreFiles] = useState([]);
   const [expandedFile, setExpandedFile] = useState(null);
@@ -48,9 +139,16 @@ export default function Knowledge() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshTopics().then((t) => {
       const keys = Object.keys(t);
-      if (keys.length > 0) setSelected(keys[0]);
+      const requested = location.state?.selectedTopic;
+      const requestedKeyword = location.state?.searchKeyword || "";
+      if (requestedKeyword) setSearchTerm(requestedKeyword);
+      if (requested && t[requested]) {
+        setSelected(requested);
+      } else if (keys.length > 0) {
+        setSelected(keys[0]);
+      }
     });
-  }, [refreshTopics]);
+  }, [refreshTopics, location.state]);
 
   const loadCore = useCallback(async (topic) => {
     try {
@@ -77,6 +175,45 @@ export default function Knowledge() {
     loadCore(selected);
     loadHighFreq(selected);
   }, [selected, loadCore, loadHighFreq]);
+
+  useEffect(() => {
+    const raw = (searchTerm || "").trim();
+    if (!raw) {
+      setSearchAliases([]);
+      setSearchBucket("");
+      setSearchBucketLabel("");
+      setSearchBucketLabels([]);
+      setSearchBucketTerms([]);
+      setSearchBucketDocHints([]);
+      return;
+    }
+    getKnowledgeQueryHints(raw)
+      .then((res) => {
+        setSearchAliases(res.aliases || (res.canonical_query ? [res.canonical_query] : [raw]));
+        setSearchBucket(res.semantic_bucket || "");
+        setSearchBucketLabel(res.semantic_bucket_label || "");
+        setSearchBucketLabels(res.semantic_bucket_labels || []);
+        setSearchBucketTerms(res.semantic_bucket_terms || []);
+        setSearchBucketDocHints(res.semantic_bucket_doc_hints || []);
+      })
+      .catch(() => {
+        setSearchAliases([raw]);
+        setSearchBucket("");
+        setSearchBucketLabel("");
+        setSearchBucketLabels([]);
+        setSearchBucketTerms([]);
+        setSearchBucketDocHints([]);
+      });
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (!searchAliases.length || !coreFiles.length) return;
+    const matched = coreFiles.find((f) => searchAliases.some((term) =>
+      (f.filename || "").toLowerCase().includes(String(term).toLowerCase()) ||
+      (f.content || "").toLowerCase().includes(String(term).toLowerCase())
+    ));
+    if (matched) setExpandedFile(matched.filename);
+  }, [searchAliases, coreFiles]);
 
   const handleSaveCore = async (filename) => {
     setCoreSaving(filename);
@@ -153,6 +290,46 @@ export default function Knowledge() {
   };
 
   const topicKeys = Object.keys(topics);
+
+  const rankedCoreFiles = coreFiles
+    .map((f) => ({
+      ...f,
+      __rank: scoreKnowledgeFile(f, searchAliases, searchBucket, searchBucketTerms, searchBucketDocHints),
+    }))
+    .filter((f) => {
+      if (!searchTerm.trim()) return true;
+      const terms = searchAliases;
+      return terms.some((term) =>
+        (f.filename || "").toLowerCase().includes(String(term).toLowerCase()) ||
+        (f.content || "").toLowerCase().includes(String(term).toLowerCase())
+      );
+    })
+    .sort((a, b) => {
+      if (!searchTerm.trim()) return String(a.filename).localeCompare(String(b.filename));
+      if ((b.__rank?.score || 0) !== (a.__rank?.score || 0)) return (b.__rank?.score || 0) - (a.__rank?.score || 0);
+      return String(a.filename).localeCompare(String(b.filename));
+    });
+
+  const readingPlan = searchTerm.trim()
+    ? rankedCoreFiles.filter((f) => (f.__rank?.score || 0) > 0).slice(0, 3)
+    : [];
+
+  const handleGoTrain = () => {
+    if (!selected) return;
+    const focusLabel = searchBucket
+      ? (searchBucketLabel || searchBucket)
+      : searchBucketLabels.length > 1
+        ? searchBucketLabels.join(' + ')
+        : searchTerm.trim();
+    navigate("/", {
+      state: {
+        quickStartMode: "topic_drill",
+        quickStartTopic: selected,
+        quickStartFocusKeyword: searchTerm.trim(),
+        quickStartFocusLabel: focusLabel,
+      },
+    });
+  };
 
   const selectTopic = (key) => {
     setSelected(key);
@@ -247,15 +424,34 @@ export default function Knowledge() {
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Tabs */}
-        <div className="flex border-b border-border px-4 md:px-6 bg-card">
-          <button
-            className={`px-4 py-3 md:px-5 text-sm border-b-2 transition-all cursor-pointer ${tab === "core" ? "text-text border-b-accent" : "text-dim border-b-transparent bg-transparent"}`}
-            onClick={() => setTab("core")}
-          >核心知识库</button>
-          <button
-            className={`px-4 py-3 md:px-5 text-sm border-b-2 transition-all cursor-pointer ${tab === "high_freq" ? "text-text border-b-accent" : "text-dim border-b-transparent bg-transparent"}`}
-            onClick={() => setTab("high_freq")}
-          >高频题库</button>
+        <div className="flex border-b border-border px-4 md:px-6 bg-card items-center justify-between gap-3 flex-wrap">
+          <div className="flex">
+            <button
+              className={`px-4 py-3 md:px-5 text-sm border-b-2 transition-all cursor-pointer ${tab === "core" ? "text-text border-b-accent" : "text-dim border-b-transparent bg-transparent"}`}
+              onClick={() => setTab("core")}
+            >核心知识库</button>
+            <button
+              className={`px-4 py-3 md:px-5 text-sm border-b-2 transition-all cursor-pointer ${tab === "high_freq" ? "text-text border-b-accent" : "text-dim border-b-transparent bg-transparent"}`}
+              onClick={() => setTab("high_freq")}
+            >高频题库</button>
+          </div>
+          <div className="px-0 md:px-0 pb-3 md:pb-0 w-full md:w-[280px]">
+            <input
+              className="w-full px-3 py-2 rounded-lg border border-border bg-bg text-text text-[13px]"
+              placeholder="按 weak point / 关键词定位内容"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm.trim() && (
+              <div className="mt-1 text-[12px] text-dim">
+                {searchBucket
+                  ? `已按 semantic bucket「${searchBucketLabel || searchBucket}」做推荐排序`
+                  : searchBucketLabels.length > 1
+                    ? `已按组合 semantic buckets「${searchBucketLabels.join(' + ')}」做推荐排序`
+                    : "已按关键词相关性做推荐排序"}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Content */}
@@ -267,6 +463,48 @@ export default function Knowledge() {
               <div className="text-[13px] text-dim mb-3">
                 AI 出题和评分的参考依据，编辑后影响该领域的题目质量。支持 Markdown 格式。
               </div>
+
+              {readingPlan.length > 0 && (
+                <div className="mb-4 rounded-box border border-accent/30 bg-accent/5 p-4">
+                  <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+                    <div>
+                      <div className="text-sm font-semibold text-text mb-1">推荐阅读顺序</div>
+                      <div className="text-[12px] text-dim">
+                        {searchBucket
+                          ? `围绕「${searchBucketLabel || searchBucket}」优先阅读下面几份材料`
+                          : searchBucketLabels.length > 1
+                            ? `围绕「${searchBucketLabels.join(' + ')}」的组合薄弱点，建议按下面顺序补`
+                            : "根据当前关键词相关性，建议优先阅读下面几份材料"}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleGoTrain}
+                      className="px-3 py-2 rounded-lg bg-accent text-white text-[12px] font-medium cursor-pointer hover:opacity-90"
+                    >
+                      开始本轮训练
+                    </button>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {readingPlan.map((f, idx) => {
+                      const labels = ["先看", "再看", "补充看"];
+                      return (
+                        <button
+                          key={f.filename}
+                          onClick={() => setExpandedFile(f.filename)}
+                          className="text-left rounded-lg border border-border bg-card px-3 py-3 cursor-pointer hover:border-accent transition-all"
+                        >
+                          <div className="text-[11px] font-medium text-accent-light mb-1">{labels[idx] || `第 ${idx + 1} 份`}</div>
+                          <div className="text-[13px] font-medium text-text break-all">{f.filename}</div>
+                          {f.__rank?.reason && (
+                            <div className="mt-1 text-[12px] text-dim">{f.__rank.reason}</div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2 mb-4">
                 {showNewFile ? (
                   <>
@@ -294,14 +532,33 @@ export default function Knowledge() {
                 <div className="text-center py-15 text-dim text-sm">该领域暂无知识文件</div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {coreFiles.map((f) => (
+                  {rankedCoreFiles.map((f) => (
                     <div key={f.filename} className="bg-card border border-border rounded-box overflow-hidden">
                       <div
-                        className="flex justify-between items-center px-4 py-3 cursor-pointer text-sm font-medium"
+                        className="flex justify-between items-start px-4 py-3 cursor-pointer text-sm font-medium gap-3"
                         onClick={() => setExpandedFile(expandedFile === f.filename ? null : f.filename)}
                       >
-                        <span>{f.filename}</span>
-                        <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <HighlightText text={f.filename} terms={searchAliases} />
+                            {searchTerm.trim() && (searchBucket || searchBucketLabels.length > 1) && f.__rank?.score > 0 && (
+                              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/10 text-accent-light">
+                                bucket: {searchBucket ? (searchBucketLabel || searchBucket) : searchBucketLabels.join(' + ')}
+                              </span>
+                            )}
+                          </div>
+                          {searchTerm.trim() && f.__rank?.reason && (
+                            <div className="mt-1 text-[12px] text-dim font-normal leading-[1.5]">
+                              推荐原因：{f.__rank.reason}
+                            </div>
+                          )}
+                          {searchTerm.trim() && getMatchPreview(f.content, searchAliases) && (
+                            <div className="mt-1 text-[12px] text-dim font-normal leading-[1.6]">
+                              <HighlightText text={getMatchPreview(f.content, searchAliases)} terms={searchAliases} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-xs text-dim flex items-center gap-1">{expandedFile === f.filename ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {(f.content?.length || 0)} 字</span>
                           <button
                             className="bg-transparent border-none text-dim cursor-pointer text-sm px-1.5 py-0.5 rounded opacity-50 transition-all hover:text-red hover:opacity-100"
@@ -312,6 +569,11 @@ export default function Knowledge() {
                       </div>
                       {expandedFile === f.filename && (
                         <div className="border-t border-border p-4">
+                          {searchTerm.trim() && (
+                            <div className="mb-3 text-[12px] text-dim">
+                              当前定位关键词：<HighlightText text={searchTerm} terms={searchAliases} />
+                            </div>
+                          )}
                           <textarea
                             className="w-full min-h-[300px] p-3 rounded-lg border border-border bg-bg text-text text-[13px] font-mono leading-relaxed resize-y"
                             value={editContent[f.filename] ?? f.content}

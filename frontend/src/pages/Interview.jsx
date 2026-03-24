@@ -5,6 +5,7 @@ import { Check, Minus, Star } from "lucide-react";
 import ChatBubble from "../components/ChatBubble";
 import { sendMessage, endInterview } from "../api/interview";
 import useVoiceInput from "../hooks/useVoiceInput";
+import { formatTopicKey } from "../utils/topicLabels";
 
 export default function Interview() {
   const { sessionId } = useParams();
@@ -159,7 +160,8 @@ export default function Interview() {
         <div className="flex items-center justify-between px-4 py-3 md:px-6 border-b border-border bg-card">
           <div className="flex items-center gap-2 md:gap-3 flex-wrap">
             <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${modeBadge.cls}`}>{modeBadge.text}</span>
-            {initData.topic && <span className="text-sm text-dim">{initData.topic}</span>}
+            {initData.topic && <span className="text-sm text-dim">{formatTopicKey(initData.topic)}</span>}
+            {initData.quickFocusLabel && <span className="text-[12px] px-2 py-1 rounded-md bg-green/10 text-green">修复目标: {initData.quickFocusLabel}</span>}
             <div className="text-[13px] text-dim">{answeredCount}/{totalQ} 已答</div>
           </div>
           <button
@@ -301,7 +303,7 @@ export default function Interview() {
       <div className="flex items-center justify-between px-4 py-3 md:px-6 border-b border-border bg-card">
         <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${modeBadge.cls}`}>{modeBadge.text}</span>
-          {initData.topic && <span className="text-sm text-dim">{initData.topic}</span>}
+          {initData.topic && <span className="text-sm text-dim">{formatTopicKey(initData.topic)}</span>}
           {progress && (
             <div className="text-[13px] text-dim flex items-center gap-1.5">
               <span>|</span>

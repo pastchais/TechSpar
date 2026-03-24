@@ -17,7 +17,7 @@
   --color-orange: var(--orange);
   --radius-box: 12px;
 
-  --font-family-display: "Sora", sans-serif;
+  --font-family-display: "DM Sans", "Noto Sans SC", system-ui, sans-serif;
 
   --animate-fade-in: fade-in 0.4s ease both;
   --animate-slide-up: slide-up 0.5s ease both;
@@ -83,7 +83,7 @@ html {
 }
 
 body {
-  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Noto Sans SC", system-ui, sans-serif;
+  font-family: "DM Sans", "Noto Sans SC", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
@@ -123,7 +123,7 @@ a {
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
-  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 .md-content pre {
   background: var(--bg-hover);

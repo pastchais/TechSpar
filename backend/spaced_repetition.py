@@ -5,7 +5,7 @@
 - 答错了 → 间隔重置到 1 天
 - 每次出题时优先出"到期需要复习"的知识点
 """
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from backend.memory import _load_profile, _save_profile
 
@@ -49,10 +49,37 @@ def sm2_update(sr_state: dict, score_0_10: float) -> dict:
     }
 
 
+def _priority_score(wp: dict) -> float:
+    sr = wp.get("sr", {})
+    ease = float(sr.get("ease_factor", 2.5) or 2.5)
+    last_score = sr.get("last_score")
+    last_score = float(last_score) if isinstance(last_score, (int, float)) else 5.0
+    times_seen = int(wp.get("times_seen", 1) or 1)
+    streak = int(wp.get("recent_low_streak", 0) or 0)
+    review_count = int(wp.get("review_count", 0) or 0)
+    days_overdue = 0
+    try:
+        next_review = sr.get("next_review")
+        if next_review:
+            days_overdue = max(0, (date.today() - date.fromisoformat(next_review)).days)
+    except Exception:
+        days_overdue = 0
+
+    # 越高越该优先复习
+    return (
+        streak * 3.0
+        + max(0, 6.0 - last_score) * 1.6
+        + max(0, 2.6 - ease) * 2.0
+        + min(times_seen, 6) * 0.7
+        + min(days_overdue, 14) * 0.35
+        - min(review_count, 10) * 0.15
+    )
+
+
 def get_due_reviews(user_id: str, topic: str = None) -> list[dict]:
     """Get weak points that are due for review.
 
-    Returns list of weak_point dicts sorted by ease_factor (hardest first).
+    Returns list of weak_point dicts sorted by urgency, not just raw ease factor.
     """
     profile = _load_profile(user_id)
     today = date.today().isoformat()
@@ -66,10 +93,11 @@ def get_due_reviews(user_id: str, topic: str = None) -> list[dict]:
         sr = wp.get("sr", {})
         next_review = sr.get("next_review", "2000-01-01")
         if next_review <= today:
-            due.append(wp)
+            item = dict(wp)
+            item["priority_score"] = round(_priority_score(wp), 2)
+            due.append(item)
 
-    # Hardest first (lowest ease_factor)
-    due.sort(key=lambda x: x.get("sr", {}).get("ease_factor", 2.5))
+    due.sort(key=lambda x: (-x.get("priority_score", 0), x.get("sr", {}).get("ease_factor", 2.5)))
     return due
 
 
@@ -77,8 +105,10 @@ def update_weak_point_sr(topic: str, point_text: str, score: float, user_id: str
     """Update spaced repetition state for a specific weak point after evaluation.
 
     Matches by topic + point text substring.
+    Also keeps lightweight history/aggregation fields for prioritization and auto-improvement.
     """
     profile = _load_profile(user_id)
+    now = datetime.now().isoformat()
 
     for wp in profile.get("weak_points", []):
         if wp.get("improved"):
@@ -89,6 +119,26 @@ def update_weak_point_sr(topic: str, point_text: str, score: float, user_id: str
         if point_text.lower() in wp["point"].lower() or wp["point"].lower() in point_text.lower():
             sr = wp.get("sr", {})
             wp["sr"] = sm2_update(sr, score)
+            wp["review_count"] = int(wp.get("review_count", 0) or 0) + 1
+            wp["last_reviewed_at"] = now
+            wp["last_score"] = score
+            history = list(wp.get("score_history", []))[-9:]
+            history.append({"at": now, "score": score})
+            wp["score_history"] = history
+
+            if score < 6:
+                wp["recent_low_streak"] = int(wp.get("recent_low_streak", 0) or 0) + 1
+                wp["last_low_score_at"] = now
+            else:
+                wp["recent_low_streak"] = 0
+
+            recent_scores = [float(x.get("score", 0)) for x in history if isinstance(x.get("score"), (int, float))]
+            recent_good = recent_scores[-3:]
+            if len(recent_good) >= 3 and min(recent_good) >= 7.5:
+                wp["improved"] = True
+                wp["improved_at"] = now
+                wp["improved_reason"] = "最近连续 3 次复习分数均 >= 7.5"
+
             _save_profile(profile, user_id)
             return True
 

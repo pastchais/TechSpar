@@ -8,6 +8,8 @@ from backend.llm_provider import get_langchain_llm
 from backend.indexer import retrieve_topic_context, load_topics
 from backend.memory import get_profile_summary, get_profile_summary_for_drill, get_topic_context_for_drill
 from backend.prompts.interviewer import DRILL_QUESTION_GEN_PROMPT, DRILL_BATCH_EVAL_PROMPT
+from backend.schemas_eval import normalize_drill_evaluation_payload
+from backend.query_hints import expand_query_terms
 
 
 def _get_topic_display(user_id: str) -> dict[str, str]:
@@ -54,7 +56,7 @@ def _load_high_freq(topic: str, user_id: str) -> str:
     return ""
 
 
-def generate_drill_questions(topic: str, user_id: str) -> list[dict]:
+def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None = None, focus_label: str | None = None) -> list[dict]:
     """Generate 10 personalized questions for a topic. 1 LLM call."""
     from backend.spaced_repetition import get_due_reviews, init_sr_for_existing_points
 
@@ -65,20 +67,46 @@ def generate_drill_questions(topic: str, user_id: str) -> list[dict]:
     topic_name = topic_display.get(topic, topic)
     drill_ctx = get_topic_context_for_drill(topic, user_id)
 
-    # Spaced repetition: prioritize due reviews
+    # Spaced repetition + weak-point priority: build weighted focus list
     due_reviews = get_due_reviews(user_id, topic)
     due_points = [wp["point"] for wp in due_reviews[:5]]
+    prioritized_weak = [w["point"] for w in drill_ctx.get("weak_point_details", [])[:8]]
 
-    all_weak = list(drill_ctx["weak_points"])
-    for dp in due_points:
-        if dp not in all_weak:
-            all_weak.insert(0, dp)
+    weighted_focus = []
+    for point in due_points + prioritized_weak:
+        if point and point not in weighted_focus:
+            weighted_focus.append(point)
+
+    focus_terms = []
+    focus_label = (focus_label or "").strip()
+    focus_keyword = (focus_keyword or "").strip()
+    focus_seed = focus_label or focus_keyword
+    if focus_seed:
+        for term in expand_query_terms(focus_seed):
+            if term and term not in focus_terms:
+                focus_terms.append(term)
+        if focus_label and focus_label not in weighted_focus:
+            weighted_focus.insert(0, focus_label)
+        elif focus_keyword and focus_keyword not in weighted_focus:
+            weighted_focus.insert(0, focus_keyword)
+
+    all_weak = list(weighted_focus)
+    for wp in drill_ctx["weak_points"]:
+        if wp not in all_weak:
+            all_weak.append(wp)
 
     # Retrieve knowledge — prioritize weak areas
     queries = []
+    if focus_terms:
+        queries.append(" ".join(focus_terms[:12]))
     if all_weak:
-        queries.append(" ".join(all_weak[:5]))
-    queries.append(f"{topic_name} 核心知识点 面试常见问题")
+        expanded = []
+        for item in all_weak[:5]:
+            for term in expand_query_terms(item):
+                if term not in expanded:
+                    expanded.append(term)
+        queries.append(" ".join(expanded[:12]))
+    queries.append(f"{topic_name} 核心知识点 面试常见问题 {' '.join(expand_query_terms(topic_name)[:6])}")
 
     all_chunks = []
     for q in queries:
@@ -101,14 +129,51 @@ def generate_drill_questions(topic: str, user_id: str) -> list[dict]:
     # Load high-frequency questions
     high_freq = _load_high_freq(topic, user_id) or "暂无"
 
-    # Format weak points, marking due reviews
+    # Format weak points with due-review + priority hints
+    priority_map = {w["point"]: w for w in drill_ctx.get("weak_point_details", [])}
     weak_lines = []
+    strategy_lines = []
+    for meta in drill_ctx.get("weak_point_details", [])[:8]:
+        point = meta.get("point")
+        if not point:
+            continue
+        strategy = meta.get("adaptive_strategy") or "stabilize"
+        if strategy == "repair":
+            advice = "先用低一档难度的概念辨析题/为什么题/单点应用题修复，不要一上来就复杂场景题"
+        elif strategy == "advance":
+            advice = "该点已基本修复，只保留少量验收题；更多题目应拓展到相邻知识点或更高阶权衡题"
+        else:
+            advice = "该点有一定回升但还不稳，适合中等难度追问题、场景变体题、边界条件题"
+        strategy_lines.append(f"- {point}: strategy={strategy}；{advice}")
     for w in all_weak[:10]:
-        prefix = "[到期复习] " if w in due_points else ""
-        weak_lines.append(f"- {prefix}{w}")
+        tags = []
+        if w in due_points:
+            tags.append("到期复习")
+        if w in prioritized_weak[:5]:
+            tags.append("高优先级")
+        meta = priority_map.get(w, {})
+        suffix_parts = []
+        if meta.get("priority_score") is not None:
+            suffix_parts.append(f"priority={meta['priority_score']}")
+        if meta.get("times_seen"):
+            suffix_parts.append(f"seen={meta['times_seen']}")
+        if meta.get("recent_low_streak"):
+            suffix_parts.append(f"low_streak={meta['recent_low_streak']}")
+        if meta.get("last_score") is not None:
+            suffix_parts.append(f"last_score={meta['last_score']}")
+        if meta.get("repair_success_rate") is not None and meta.get("repair_attempts"):
+            suffix_parts.append(f"repair_rate={meta['repair_success_rate']}")
+        if meta.get("adaptive_strategy"):
+            suffix_parts.append(f"strategy={meta['adaptive_strategy']}")
+        prefix = f"[{'/'.join(tags)}] " if tags else ""
+        suffix = f" ({', '.join(suffix_parts)})" if suffix_parts else ""
+        weak_lines.append(f"- {prefix}{w}{suffix}")
 
-    # Difficulty range and question strategy based on mastery
+    # Difficulty range and question strategy based on mastery + adaptive weak-point state
     mastery_score = drill_ctx["mastery_score"]
+    repair_count = sum(1 for x in drill_ctx.get("weak_point_details", [])[:6] if x.get("adaptive_strategy") == "repair")
+    advance_count = sum(1 for x in drill_ctx.get("weak_point_details", [])[:6] if x.get("adaptive_strategy") == "advance")
+
     if mastery_score <= 30:
         diff_min, diff_max = 1, 3
         question_strategy = (
@@ -133,12 +198,28 @@ def generate_drill_questions(topic: str, user_id: str) -> list[dict]:
             "- 20% 概念题（考边界 case 和底层原理），80% 场景设计 + 系统权衡题"
         )
 
+    adaptive_notes = []
+    if repair_count >= 2:
+        diff_max = max(diff_min, diff_max - 1)
+        adaptive_notes.append("当前多个高优先级弱点仍处于 repair 阶段：整体难度上限下调一档，前半程优先做概念澄清、单点 why、低复杂度应用题。")
+    if advance_count >= 2 and repair_count == 0:
+        diff_min = min(diff_max, diff_min + 1)
+        adaptive_notes.append("当前多个高优先级弱点已进入 advance 阶段：减少基础修复题比例，增加场景权衡题、边界 case、跨知识点迁移题。")
+    if not adaptive_notes:
+        adaptive_notes.append("当前以 stabilize 策略为主：保持中等难度，优先追问型和场景变体题，验证是否真正稳定掌握。")
+
+    question_strategy = question_strategy + "\n- 自适应训练策略：\n" + "\n".join(f"  {note}" for note in adaptive_notes)
+    if focus_seed:
+        question_strategy += f"\n- 本次训练显式修复目标：优先围绕「{focus_seed}」出前几题，至少覆盖其相关概念辨析、工程落地或边界追问。"
+
     prompt = DRILL_QUESTION_GEN_PROMPT.format(
         topic_name=topic_name,
         knowledge_context=knowledge_ctx,
         user_profile=get_profile_summary_for_drill(user_id),
         mastery_info=drill_ctx["mastery_info"],
         weak_points="\n".join(weak_lines) or "暂无",
+        priority_weak_points="\n".join(f"- {w}" for w in weighted_focus[:6]) or "暂无",
+        adaptive_focus_strategy="\n".join(strategy_lines) or "暂无",
         high_freq_questions=high_freq,
         recent_questions="\n".join(f"- {q}" for q in drill_ctx["recent_questions"][-10:]) or "暂无",
         past_insights=past_insights_text,
@@ -157,9 +238,26 @@ def generate_drill_questions(topic: str, user_id: str) -> list[dict]:
         questions = _parse_json_response(response.content)
         if not isinstance(questions, list):
             raise ValueError(f"Expected a list, got {type(questions)}")
+
+        high_focus_terms = [x.lower() for x in weighted_focus[:4]]
+        explicit_focus_terms = [x.lower() for x in focus_terms[:8]]
+        def _focus_hit(q: dict) -> int:
+            hay = f"{q.get('focus_area', '')} {q.get('question', '')}".lower()
+            score = sum(1 for term in high_focus_terms if term and term in hay)
+            score += sum(2 for term in explicit_focus_terms if term and term in hay)
+            return score
+
+        if high_focus_terms:
+            questions = sorted(
+                questions,
+                key=lambda q: (-_focus_hit(q), q.get("difficulty", 99))
+            )
+
         # Ensure each question has an id
         for i, q in enumerate(questions):
             if "id" not in q:
+                q["id"] = i + 1
+            else:
                 q["id"] = i + 1
         return questions[:10]
     except (json.JSONDecodeError, ValueError, IndexError) as e:
@@ -208,7 +306,7 @@ def evaluate_drill_answers(topic: str, questions: list[dict], answers: list[dict
         result = _parse_json_response(response.content)
         if not isinstance(result, dict):
             raise ValueError(f"Expected a dict, got {type(result)}")
-        return result
+        return normalize_drill_evaluation_payload(result, topic).model_dump()
     except (json.JSONDecodeError, ValueError, IndexError) as e:
         import logging
         logger = logging.getLogger("uvicorn")

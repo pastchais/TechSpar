@@ -1,5 +1,6 @@
 """LlamaIndex indexing for resume and interview knowledge base."""
 import json
+import logging
 from pathlib import Path
 
 from llama_index.core import (
@@ -12,6 +13,9 @@ from llama_index.core import (
 
 from backend.config import settings
 from backend.llm_provider import get_llama_llm, get_embedding
+from backend.query_hints import expand_query_terms
+
+logger = logging.getLogger("uvicorn")
 
 # In-memory index cache keyed by (user_id, topic_or_resume)
 _index_cache: dict[tuple[str, str], "VectorStoreIndex"] = {}
@@ -111,6 +115,52 @@ def build_topic_index(topic: str, user_id: str, force_rebuild: bool = False) -> 
     return index
 
 
+def _build_effective_query(query: str) -> str:
+    terms = expand_query_terms(query)
+    return " ".join(terms) if terms else query
+
+
+def _load_topic_docs_fallback(topic: str, user_id: str, max_chars: int = 8000, query: str | None = None) -> list[str]:
+    """Fallback local-doc loader when vector indexing/embedding is unavailable."""
+    topic_map = get_topic_map(user_id)
+    if topic not in topic_map:
+        return []
+
+    topic_dir = settings.user_knowledge_path(user_id) / topic_map[topic]
+    if not topic_dir.exists():
+        return []
+
+    terms = expand_query_terms(query)
+    scored_chunks: list[tuple[int, str]] = []
+    total = 0
+    for path in sorted(topic_dir.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in {".md", ".txt", ".py"}:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+        except Exception:
+            continue
+        if not text:
+            continue
+        snippet = f"# {path.relative_to(topic_dir)}\n{text[:1800]}"
+        lower = snippet.lower()
+        score = 0
+        for term in terms:
+            t = str(term).lower()
+            if t and t in lower:
+                score += 1
+        scored_chunks.append((score, snippet))
+
+    scored_chunks.sort(key=lambda x: (-x[0], x[1][:80]))
+    chunks = []
+    for score, snippet in scored_chunks:
+        if total >= max_chars:
+            break
+        chunks.append(snippet)
+        total += len(snippet)
+    return chunks
+
+
 def query_resume(question: str, user_id: str, top_k: int = 3) -> str:
     """Query the resume index."""
     index = build_resume_index(user_id)
@@ -121,15 +171,29 @@ def query_resume(question: str, user_id: str, top_k: int = 3) -> str:
 
 def query_topic(topic: str, question: str, user_id: str, top_k: int = 5) -> str:
     """Query a topic knowledge base."""
-    index = build_topic_index(topic, user_id)
-    engine = index.as_query_engine(similarity_top_k=top_k)
-    response = engine.query(question)
-    return str(response)
+    effective_query = _build_effective_query(question)
+    try:
+        index = build_topic_index(topic, user_id)
+        engine = index.as_query_engine(similarity_top_k=top_k)
+        response = engine.query(effective_query)
+        return str(response)
+    except Exception as e:
+        logger.warning(f"query_topic fallback for topic={topic}: {e}")
+        return "\n\n---\n\n".join(_load_topic_docs_fallback(topic, user_id, max_chars=5000, query=question))
 
 
 def retrieve_topic_context(topic: str, question: str, user_id: str, top_k: int = 5) -> list[str]:
-    """Retrieve raw text chunks from topic index (for answer evaluation)."""
-    index = build_topic_index(topic, user_id)
-    retriever = index.as_retriever(similarity_top_k=top_k)
-    nodes = retriever.retrieve(question)
-    return [node.get_content() for node in nodes]
+    """Retrieve raw text chunks from topic index (for answer evaluation).
+
+    Falls back to local docs when embeddings/index build are unavailable, so drill/review
+    can still proceed under degraded retrieval quality instead of hard failing.
+    """
+    effective_query = _build_effective_query(question)
+    try:
+        index = build_topic_index(topic, user_id)
+        retriever = index.as_retriever(similarity_top_k=top_k)
+        nodes = retriever.retrieve(effective_query)
+        return [node.get_content() for node in nodes]
+    except Exception as e:
+        logger.warning(f"retrieve_topic_context fallback for topic={topic}: {e}")
+        return _load_topic_docs_fallback(topic, user_id, query=question)

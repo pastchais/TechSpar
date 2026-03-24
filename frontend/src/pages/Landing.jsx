@@ -16,7 +16,7 @@ export default function Landing() {
       {/* ── Nav ── */}
       <header className="flex items-center justify-between px-6 md:px-10 py-4">
         <div className="flex items-center gap-2.5">
-          <img src="/logo.png" alt="TechSpar" className="w-8 h-8 rounded-lg object-contain" />
+          <img src="/favicon.svg" alt="TechSpar" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-lg font-display font-bold text-text">TechSpar</span>
         </div>
         <div className="flex items-center gap-3">

@@ -1,0 +1,20 @@
+example.com {
+    encode gzip zstd
+
+    @api path /api/*
+    reverse_proxy @api techspar-backend:8000
+
+    reverse_proxy techspar-frontend:80
+}
+
+# Optional reverse proxy for a local Tavily-compatible gateway
+# tavily.example.com {
+#     encode gzip zstd
+#
+#     @root path /
+#     redir @root /index.html 302
+#
+#     reverse_proxy 172.18.0.1:8080 {
+#         header_up Authorization "Bearer REPLACE_WITH_TOKEN"
+#     }
+# }

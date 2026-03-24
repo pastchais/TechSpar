@@ -28,3 +28,9 @@ data/.index_cache/
 data/models/
 .DS_Store
 llm.md
+
+# Local runtime / deployment secrets
+.runtime/
+.secrets/
+data/runtime_settings.json
+deploy/Caddyfile

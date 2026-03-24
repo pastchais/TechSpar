@@ -67,7 +67,7 @@ export default function TopicDetail() {
       </div>
 
       {/* Header */}
-      <div className="flex items-center gap-3 md:gap-4 mb-8">
+      <div className="flex items-center gap-3 md:gap-4 mb-5">
         <div className="text-dim">{getTopicIcon(topicInfo?.icon, 36)}</div>
         <div className="flex-1">
           <div className="text-2xl md:text-[28px] font-display font-bold">{topicInfo?.name || topic}</div>
@@ -76,6 +76,21 @@ export default function TopicDetail() {
             {mastery.last_assessed && ` | 上次评估: ${mastery.last_assessed.slice(0, 10)}`}
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-8">
+        <button
+          className="px-4 py-2 rounded-lg bg-green text-white text-[13px] font-medium border-none cursor-pointer"
+          onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
+        >
+          开始本专题训练
+        </button>
+        <button
+          className="px-4 py-2 rounded-lg bg-hover border border-border text-text text-[13px] font-medium cursor-pointer"
+          onClick={() => navigate("/knowledge", { state: { selectedTopic: topic } })}
+        >
+          先看题库
+        </button>
       </div>
 
       {/* Mastery bar */}

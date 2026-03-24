@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import ForceGraph2D from "react-force-graph-2d";
 import { getTopics, getGraphData } from "../api/interview";
 import { getTopicIcon } from "../utils/topicIcons";
 
@@ -17,6 +16,8 @@ export default function Graph() {
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [graphLibLoading, setGraphLibLoading] = useState(false);
+  const [ForceGraphComponent, setForceGraphComponent] = useState(null);
   const [hoveredNode, setHoveredNode] = useState(null);
   const containerRef = useRef(null);
   const fgRef = useRef(null);
@@ -25,6 +26,15 @@ export default function Graph() {
   useEffect(() => {
     getTopics().then(setTopics).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!selectedTopic || ForceGraphComponent) return;
+    setGraphLibLoading(true);
+    import("react-force-graph-2d")
+      .then((mod) => setForceGraphComponent(() => mod.default))
+      .catch(() => {})
+      .finally(() => setGraphLibLoading(false));
+  }, [selectedTopic, ForceGraphComponent]);
 
   // Resize observer for responsive canvas
   useEffect(() => {
@@ -134,9 +144,9 @@ export default function Graph() {
           </div>
         )}
 
-        {loading && (
+        {(loading || graphLibLoading) && (
           <div className="flex items-center justify-center h-[400px] text-dim text-sm">
-            正在构建图谱...
+            {loading ? "正在构建图谱..." : "正在加载图谱引擎..."}
           </div>
         )}
 
@@ -146,8 +156,8 @@ export default function Graph() {
           </div>
         )}
 
-        {selectedTopic && !loading && graphData && graphData.nodes.length > 0 && (
-          <ForceGraph2D
+        {selectedTopic && !loading && !graphLibLoading && graphData && graphData.nodes.length > 0 && ForceGraphComponent && (
+          <ForceGraphComponent
             ref={fgRef}
             graphData={graphData}
             width={dimensions.width}
