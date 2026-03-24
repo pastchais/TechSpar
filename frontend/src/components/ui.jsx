@@ -9,6 +9,10 @@ export function PageTitle({ title, subtitle, className = "" }) {
   );
 }
 
+export function SectionTitle({ children, className = "" }) {
+  return <div className={`text-base font-semibold mb-3 text-text ${className}`}>{children}</div>;
+}
+
 export function Badge({ children, tone = "muted", className = "", title, as = "span", ...props }) {
   const toneClass = {
     muted: "bg-hover text-dim",

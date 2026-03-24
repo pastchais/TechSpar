@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { FileText, ChevronRight, Mic } from "lucide-react";
 import TopicCard from "../components/TopicCard";
 import { getTopics, startInterview, getResumeStatus, uploadResume, getProfile } from "../api/interview";
-import { Badge, SubtleButton } from "../components/ui.jsx";
+import { Badge, SubtleButton, SectionTitle } from "../components/ui.jsx";
 
 function recommendationBadge(confidence) {
   if (confidence === "high") return "bg-green/10 text-green";
@@ -344,20 +344,20 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   {primaryRecommendation.topic && (
-                    <button
+                    <SubtleButton
                       onClick={() => launchInterview(
                         "topic_drill",
                         primaryRecommendation.topic,
                         primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "",
                         primaryRecommendation.focus_label || "",
                       )}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-green/10 text-green border-none cursor-pointer"
+                      className="bg-green/10 py-1.5 text-[12px] text-green hover:text-green"
                     >
                       立即开始推荐训练
-                    </button>
+                    </SubtleButton>
                   )}
                   {primaryRecommendation.topic && (
-                    <button
+                    <SubtleButton
                       onClick={() => {
                         setMode("topic_drill");
                         setSelectedTopic(primaryRecommendation.topic);
@@ -366,18 +366,18 @@ export default function Home() {
                         setPresetNotice("已应用推荐训练目标");
                         setTimeout(() => scrollToSummary(), 100);
                       }}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                      className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light"
                     >
                       先按推荐配置
-                    </button>
+                    </SubtleButton>
                   )}
                   {primaryRecommendation.topic && (
-                    <button
+                    <SubtleButton
                       onClick={() => navigate("/knowledge", { state: { selectedTopic: primaryRecommendation.topic, searchKeyword: primaryRecommendation.pre_read_keyword || primaryRecommendation.focus_label } })}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-hover text-dim border-none cursor-pointer"
+                      className="py-1.5 text-[12px]"
                     >
                       先看题库
-                    </button>
+                    </SubtleButton>
                   )}
                 </div>
               </div>
@@ -452,7 +452,7 @@ export default function Home() {
                   setPresetNotice("已应用推荐训练目标");
                   setTimeout(() => scrollToSummary(), 120);
                 }}
-                className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light"
               >
                 使用当前推荐
               </button>
