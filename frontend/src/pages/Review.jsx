@@ -1,7 +1,7 @@
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { PageTitle } from "../components/ui.jsx";
+import { PageTitle, SectionTitle, SubtleButton } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
 import { getReview, getReferenceAnswer, scoreInterviewAnswer, getTopics } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
@@ -201,7 +201,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
       {/* Weak & strong points */}
       {overall?.new_weak_points?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-3 mt-2 text-text">薄弱点</div>
+          <SectionTitle className="mt-2">薄弱点</SectionTitle>
           <div className="flex flex-col gap-1.5 mb-4">
             {overall.new_weak_points.map((wp, i) => (
               <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">
@@ -213,7 +213,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
       )}
       {overall?.new_strong_points?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-3 mt-2 text-text">亮点</div>
+          <SectionTitle className="mt-2">亮点</SectionTitle>
           <div className="flex flex-col gap-1.5 mb-4">
             {overall.new_strong_points.map((sp, i) => (
               <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/8 border border-green/20">
@@ -227,7 +227,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
       {/* Topics covered */}
       {topicsCovered?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-3 mt-2 text-text">涉及知识点</div>
+          <SectionTitle className="mt-2">涉及知识点</SectionTitle>
           {topicsCovered.map((t, i) => {
             const score = t.score;
             const sc = typeof score === "number" ? getScoreColor(score) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
@@ -301,7 +301,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
       {/* Targeting stats */}
       {overall?.targeting_stats && (
         <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
-          <div className="text-base font-semibold mb-3">针对性训练命中</div>
+          <SectionTitle>针对性训练命中</SectionTitle>
           {overall.targeting_stats.focus_label && (
             <div className="mb-4 rounded-xl border border-green/20 bg-green/5 px-4 py-3">
               <div className="text-[13px] font-semibold text-text mb-1">本次显式修复目标</div>
@@ -429,7 +429,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
       {/* Weak points */}
       {overall?.new_weak_points?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-3 mt-2 text-text">薄弱点</div>
+          <SectionTitle className="mt-2">薄弱点</SectionTitle>
           <div className="flex flex-col gap-1.5 mb-4">
             {overall.new_weak_points.map((wp, i) => (
               <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">
@@ -443,7 +443,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
       {/* Strong points */}
       {overall?.new_strong_points?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-3 mt-2 text-text">亮点</div>
+          <SectionTitle className="mt-2">亮点</SectionTitle>
           <div className="flex flex-col gap-1.5 mb-4">
             {overall.new_strong_points.map((sp, i) => (
               <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/8 border border-green/20">
@@ -455,7 +455,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
       )}
 
       {/* Per-question cards */}
-      <div className="text-base font-semibold mb-3 mt-2 text-text">逐题复盘</div>
+      <SectionTitle className="mt-2">逐题复盘</SectionTitle>
       {(questions || []).map((q) => {
         const s = scoreMap[q.id] || {};
         const answer = answerMap[q.id];

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, Sparkles, ChevronRight, ChevronDown } from "lucide-react";
 import { getTopicIcon, ICON_OPTIONS } from "../utils/topicIcons";
+import { SectionTitle, SubtleButton } from "../components/ui.jsx";
 import {
   getTopics,
   getCoreKnowledge,
@@ -468,7 +469,7 @@ export default function Knowledge() {
                 <div className="mb-4 rounded-box border border-accent/30 bg-accent/5 px-4 py-4 md:px-5">
                   <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                     <div>
-                      <div className="text-sm font-semibold text-text mb-1">推荐阅读顺序</div>
+                      <SectionTitle className="mb-1 text-sm">推荐阅读顺序</SectionTitle>
                       <div className="text-[12px] text-dim">
                         {searchBucket
                           ? `围绕「${searchBucketLabel || searchBucket}」优先阅读下面几份材料`
@@ -514,7 +515,7 @@ export default function Knowledge() {
                   </>
                 ) : (
                   <>
-                    <button className="px-5 py-2 rounded-lg border border-border bg-hover text-text text-[13px] cursor-pointer" onClick={() => setShowNewFile(true)}>+ 新增文件</button>
+                    <SubtleButton onClick={() => setShowNewFile(true)} className="px-5 py-2">+ 新增文件</SubtleButton>
                     {coreIsEmpty && (
                       <button
                         className="px-5 py-2 rounded-lg bg-accent/15 border border-accent/40 text-accent-light text-[13px] cursor-pointer disabled:opacity-50"
@@ -604,7 +605,7 @@ export default function Knowledge() {
               <div className="flex gap-2 mt-3 justify-end flex-wrap">
                 {hfSaving && <span className="text-xs text-green self-center mr-3">已保存</span>}
                 {highFreqDraft !== highFreq && (
-                  <button className="px-5 py-2 rounded-lg border border-border bg-hover text-text text-[13px] cursor-pointer" onClick={() => setHighFreqDraft(highFreq)}>撤销修改</button>
+                  <SubtleButton onClick={() => setHighFreqDraft(highFreq)} className="px-5 py-2">撤销修改</SubtleButton>
                 )}
                 <button className="px-5 py-2 rounded-lg bg-accent text-white text-[13px] cursor-pointer disabled:opacity-40" onClick={handleSaveHighFreq} disabled={highFreqDraft === highFreq}>保存</button>
               </div>
