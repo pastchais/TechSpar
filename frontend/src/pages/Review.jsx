@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { PageTitle, SectionTitle, SubtleButton } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
-import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview } from "../api/interview";
+import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview, getHistory } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
 
 function getScoreColor(score) {
@@ -209,6 +209,43 @@ function PracticeComparisonCard({ comparison }) {
         </div>
       )}
       {comparison.verdict && <div className="text-[13px] text-dim">结论：{comparison.verdict}</div>}
+    </div>
+  );
+}
+
+function PracticeTrendCard({ focusLabel, items = [] }) {
+  if (!focusLabel || !items.length) return null;
+  const recent = items.slice(-5);
+  return (
+    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="text-lg font-semibold">同一目标复练轨迹</div>
+        <div className="text-sm text-dim">{focusLabel}</div>
+      </div>
+      <div className="flex items-end gap-2 h-28 mb-3">
+        {recent.map((item, idx) => {
+          const score = typeof item.avg_score === "number" ? item.avg_score : 0;
+          const height = Math.max(12, Math.round((score / 10) * 100));
+          const color = score >= 8 ? "var(--green)" : score >= 6 ? "var(--accent-light)" : "var(--red)";
+          return (
+            <div key={`${item.session_id}-${idx}`} className="flex-1 min-w-0 flex flex-col items-center gap-1">
+              <div className="text-[11px] text-dim">{typeof item.avg_score === "number" ? item.avg_score : "-"}</div>
+              <div className="w-full rounded-t-md" style={{ height: `${height}%`, background: color, minHeight: 12 }} />
+              <div className="text-[10px] text-dim whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                {String(item.created_at || "").slice(5, 10)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {recent.map((item) => (
+          <div key={item.session_id} className="px-3 py-2 rounded-lg text-[12px] bg-hover border border-border text-text">
+            {String(item.created_at || "").slice(5, 16)} · {item.avg_score ?? "-"}/10
+            {item.focus_hit_rate != null ? ` · 命中 ${(item.focus_hit_rate * 100).toFixed(0)}%` : ""}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -890,6 +927,7 @@ export default function Review() {
   const [referenceAnswers, setReferenceAnswers] = useState(stateData.reference_answers || {});
   const [referenceFollowups, setReferenceFollowups] = useState(stateData.reference_followups || {});
   const [improvedAnswers, setImprovedAnswers] = useState(stateData.improved_answers || {});
+  const [practiceTrend, setPracticeTrend] = useState([]);
   const [showTranscript, setShowTranscript] = useState(false);
   const [loading, setLoading] = useState(!review && !scores);
 
@@ -943,6 +981,19 @@ export default function Review() {
     }
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const focusLabel = overall?.practice_comparison?.focus_label;
+    if (!topic || !focusLabel) return;
+    getHistory(50, 0, "topic_drill", topic)
+      .then((data) => {
+        const items = (data.items || [])
+          .filter((item) => item.focus_label === focusLabel)
+          .reverse();
+        setPracticeTrend(items);
+      })
+      .catch(() => {});
+  }, [topic, overall?.practice_comparison?.focus_label]);
+
   if (loading) {
     return <div className="text-center py-15 text-dim">加载复盘报告中...</div>;
   }
@@ -959,6 +1010,7 @@ export default function Review() {
 
       <AutoScoreCard autoScore={autoScore} />
       <PracticeComparisonCard comparison={overall?.practice_comparison} />
+      <PracticeTrendCard focusLabel={overall?.practice_comparison?.focus_label} items={practiceTrend} />
 
       {isRecording && !isRecordingDual ? (
         <SoloRecordingReview topicsCovered={topicsCovered} overall={overall} />
