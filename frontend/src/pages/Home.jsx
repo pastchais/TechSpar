@@ -463,11 +463,13 @@ export default function Home() {
               return (
                 <div
                   key={key}
-                  className={`relative rounded-2xl transition-all ${isRecommendedTopic ? "ring-1 ring-orange/30 bg-orange/5" : ""} ${isSelected ? "shadow-[0_0_0_1px_rgba(34,197,94,0.25)]" : ""}`}
+                  className={`rounded-2xl transition-all overflow-hidden ${isRecommendedTopic ? "ring-1 ring-orange/30 bg-orange/5" : ""} ${isSelected ? "shadow-[0_0_0_1px_rgba(34,197,94,0.25)]" : ""}`}
                 >
                   {isRecommendedTopic && (
-                    <div className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded text-[10px] font-medium bg-orange/15 text-orange pointer-events-none">
-                      {isSelected ? "已按推荐选中" : "建议优先训练"}
+                    <div className="px-3 pt-3 pb-1 flex justify-end">
+                      <div className="max-w-full px-2 py-0.5 rounded text-[10px] leading-4 font-medium bg-orange/15 text-orange break-words">
+                        {isSelected ? "已按推荐选中" : "建议优先训练"}
+                      </div>
                     </div>
                   )}
                   <TopicCard
@@ -490,8 +492,8 @@ export default function Home() {
                     }}
                   />
                   {isRecommendedTopic && (
-                    <div className="px-3 pb-3 -mt-1">
-                      <div className="rounded-lg bg-orange/8 px-2.5 py-2 text-[11px] text-dim leading-[1.6]">
+                    <div className="px-3 pb-3 pt-1">
+                      <div className="rounded-lg bg-orange/8 px-2.5 py-2 text-[11px] leading-[1.7] break-words text-dim">
                         推荐原因：{primaryRecommendation?.focus_label ? `可从「${primaryRecommendation.focus_label}」切入。` : "这是你当前更该优先修复的专题。"}
                       </div>
                     </div>
