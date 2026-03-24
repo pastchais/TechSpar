@@ -173,12 +173,12 @@ export default function Home() {
   return (
     <div className="flex-1 flex flex-col items-center px-4 pt-8 pb-10 md:px-6 md:pt-15">
       {/* Hero */}
-      <div className="text-center mb-10 md:mb-12 relative animate-fade-in">
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[500px] h-[250px] bg-gradient-to-b from-accent/10 via-accent/5 to-transparent rounded-full blur-3xl pointer-events-none" />
-        <h1 className="text-3xl md:text-[44px] font-display font-bold mb-3 bg-gradient-to-r from-accent-light via-accent to-orange bg-clip-text text-transparent relative">
+      <div className="text-center mb-8 md:mb-12 relative animate-fade-in px-2">
+        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[300px] h-[180px] md:w-[500px] md:h-[250px] bg-gradient-to-b from-accent/10 via-accent/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <h1 className="text-[28px] leading-tight md:text-[44px] font-display font-bold mb-2.5 bg-gradient-to-r from-accent-light via-accent to-orange bg-clip-text text-transparent relative">
           TechSpar
         </h1>
-        <p className="text-base text-dim max-w-[500px] relative">
+        <p className="text-[14px] leading-6 md:text-base text-dim max-w-[500px] relative mx-auto">
           AI 面试训练系统——追踪成长轨迹，定位薄弱点
         </p>
       </div>
@@ -214,7 +214,7 @@ export default function Home() {
                     setTimeout(() => scrollToTopicSection(), 120);
                   }
                 }}
-                className={`relative group flex flex-col items-start text-left p-6 rounded-2xl border-2 transition-all duration-500 transform active:scale-[0.98] ${
+                className={`group flex flex-col items-start text-left p-5 md:p-6 rounded-2xl border-2 transition-all duration-500 transform active:scale-[0.98] ${
                   isSelected 
                     ? `border-opacity-100 bg-opacity-10 shadow-xl` 
                     : `border-transparent bg-card hover:bg-hover/60 hover:border-border`
@@ -225,16 +225,7 @@ export default function Home() {
                   boxShadow: isSelected ? `0 12px 30px -10px ${themeColor}33` : "none"
                 }}
               >
-                {/* Selection Indicator */}
-                <div className={`absolute top-4 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                  isSelected
-                    ? (meta.color === "accent" ? "bg-accent border-accent" : "bg-green border-green")
-                    : "border-border group-hover:border-accent/50"
-                }`}>
-                  {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                </div>
-
-                <div className={`p-2.5 rounded-xl mb-4 transition-all duration-300 ${
+                <div className={`p-2.5 rounded-xl mb-3 transition-all duration-300 ${
                   isSelected ? "scale-110" : "bg-hover text-dim group-hover:text-text"
                 }`}
                 style={{ 
@@ -244,11 +235,24 @@ export default function Home() {
                   {meta.icon}
                 </div>
                 
-                <div className={`text-lg font-bold mb-1.5 transition-colors ${isSelected ? "text-text" : "text-dim group-hover:text-text"}`}>
+                <div className={`text-[17px] md:text-lg font-bold mb-1.5 transition-colors ${isSelected ? "text-text" : "text-dim group-hover:text-text"}`}>
                   {meta.label}
                 </div>
-                <div className="text-[13px] text-dim leading-relaxed opacity-80 group-hover:opacity-100">
+                <div className="text-[13px] text-dim leading-[1.7] opacity-80 group-hover:opacity-100 break-words">
                   {meta.hint}
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                    isSelected
+                      ? (meta.color === "accent" ? "bg-accent border-accent" : "bg-green border-green")
+                      : "border-border group-hover:border-accent/50"
+                  }`}>
+                    {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                  </span>
+                  <span className={`text-[12px] font-medium ${isSelected ? "text-text" : "text-dim"}`}>
+                    {isSelected ? "当前已选中" : "点击选择"}
+                  </span>
                 </div>
 
                 {/* Focus indicator bar */}
