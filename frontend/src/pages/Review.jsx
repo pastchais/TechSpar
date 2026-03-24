@@ -28,6 +28,14 @@ const AUTO_SCORE_LABELS = {
   delivery: "表达完成度",
 };
 
+const FOLLOWUP_QUICK_ACTIONS = [
+  { label: "更口语化", prompt: "请把这道题的标准参考答案改写成更口语化、像真实面试中会说出来的版本，控制在 1 分钟内。" },
+  { label: "30 秒版本", prompt: "请把这道题压缩成一个 30 秒可讲完的回答，保留最关键的信息。" },
+  { label: "项目实战版", prompt: "请结合真实项目场景，给我一个更像工程落地的回答版本，强调为什么这样设计。" },
+  { label: "继续追问版", prompt: "如果面试官继续深挖这道题，请帮我列出 3 个高概率追问，并分别给出回答思路。" },
+  { label: "只提示漏点", prompt: "先不要直接给完整答案，只告诉我如果我来回答，这题最容易漏掉的 3-5 个关键点是什么。" },
+];
+
 function strategyBadge(strategy) {
   if (strategy === "repair") return { label: "攻坚", bg: "rgba(239,68,68,.12)", color: "var(--red)" };
   if (strategy === "advance") return { label: "进阶", bg: "rgba(34,197,94,.12)", color: "var(--green)" };
@@ -643,6 +651,18 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
                     {followupOpen[q.id] && (
                       <div className="mt-3 rounded-lg border border-border bg-hover px-3 py-3">
                         <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
+                        <div className="flex flex-wrap gap-2 mb-2.5">
+                          {FOLLOWUP_QUICK_ACTIONS.map((item) => (
+                            <button
+                              key={item.label}
+                              className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer"
+                              onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))}
+                              type="button"
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
                         <textarea
                           className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none"
                           placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子"
