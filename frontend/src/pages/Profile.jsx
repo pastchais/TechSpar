@@ -359,7 +359,7 @@ function WeakPointCard({ w, navigate, setStrategyFilter, topics, onOpenDetails }
         )}
         <button
           onClick={() => onOpenDetails?.(w)}
-          className="px-2 py-0.5 rounded text-[11px] font-medium bg-transparent text-accent-light border border-border cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-transparent px-2 py-0.5 text-[11px] font-medium text-accent-light cursor-pointer transition-all hover:border-accent/40"
         >
           查看分析
         </button>
@@ -392,7 +392,7 @@ function CompactWeakPointRow({ w, topics, onOpenDetails }) {
         </div>
         <button
           onClick={() => onOpenDetails?.(w)}
-          className="px-2 py-1 rounded-lg text-[11px] font-medium bg-transparent text-accent-light border border-border cursor-pointer shrink-0"
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-transparent px-2 py-1 text-[11px] font-medium text-accent-light cursor-pointer shrink-0 transition-all hover:border-accent/40"
         >
           查看详情
         </button>
@@ -550,12 +550,12 @@ export default function Profile() {
         {stats.total_answers || 0} 次回答分析{stats.total_sessions ? ` | ${stats.total_sessions} 次完整面试` : ""} | 上次更新: {profile.updated_at?.slice(0, 16)}
       </div>
       <div className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-border bg-card px-3 py-3">
-        <button onClick={() => scrollToSection(coachRef)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer">现在该练什么</button>
-        <button onClick={() => scrollToSection(insightsRef)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-hover text-dim border-none cursor-pointer">画像重点</button>
-        <button onClick={() => scrollToSection(trendRef)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-hover text-dim border-none cursor-pointer">成长趋势</button>
-        <button onClick={() => scrollToSection(masteryRef)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-hover text-dim border-none cursor-pointer">掌握度</button>
-        <button onClick={() => scrollToSection(analysisRef)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-hover text-dim border-none cursor-pointer">表达与思维</button>
-        <button onClick={() => scrollToSection(statsRef)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-hover text-dim border-none cursor-pointer">练习统计</button>
+        <button onClick={() => scrollToSection(coachRef)} className="rounded-xl border-none bg-accent/10 px-3 py-1.5 text-[12px] font-medium text-accent-light cursor-pointer">现在该练什么</button>
+        <button onClick={() => scrollToSection(insightsRef)} className="rounded-xl border-none bg-hover px-3 py-1.5 text-[12px] font-medium text-dim cursor-pointer transition-all hover:text-accent-light">画像重点</button>
+        <button onClick={() => scrollToSection(trendRef)} className="rounded-xl border-none bg-hover px-3 py-1.5 text-[12px] font-medium text-dim cursor-pointer transition-all hover:text-accent-light">成长趋势</button>
+        <button onClick={() => scrollToSection(masteryRef)} className="rounded-xl border-none bg-hover px-3 py-1.5 text-[12px] font-medium text-dim cursor-pointer transition-all hover:text-accent-light">掌握度</button>
+        <button onClick={() => scrollToSection(analysisRef)} className="rounded-xl border-none bg-hover px-3 py-1.5 text-[12px] font-medium text-dim cursor-pointer transition-all hover:text-accent-light">表达与思维</button>
+        <button onClick={() => scrollToSection(statsRef)} className="rounded-xl border-none bg-hover px-3 py-1.5 text-[12px] font-medium text-dim cursor-pointer transition-all hover:text-accent-light">练习统计</button>
       </div>
 
       {/* Stats */}

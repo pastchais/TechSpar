@@ -289,10 +289,10 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
           <div className="mt-4 text-[15px] leading-[1.8] text-text">{overall.summary}</div>
         )}
         <div className="flex flex-wrap gap-4 mt-4">
-          <span className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-hover text-dim">
+          <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
             共 {questions?.length || 0} 题
           </span>
-          <span className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-hover text-dim">
+          <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
             已答 {answers?.filter((a) => a.answer).length || 0} 题
           </span>
         </div>
@@ -313,17 +313,17 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
             </div>
           )}
           <div className="flex flex-wrap gap-3 mb-4">
-            <span className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-hover text-dim">
+            <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
               命中率 {(overall.targeting_stats.hit_rate * 100).toFixed(0)}%
             </span>
-            <span className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-hover text-dim">
+            <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
               修复率 {(overall.targeting_stats.repair_rate * 100).toFixed(0)}%
             </span>
-            <span className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-hover text-dim">
+            <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
               前3题命中高优先级点 {overall.targeting_stats.front3_high_priority_hits || 0} 次
             </span>
             {overall.targeting_stats.focus_label && (
-              <span className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium bg-hover text-dim">
+              <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
                 focus 命中率 {((overall.targeting_stats.focus_hit_rate || 0) * 100).toFixed(0)}%
               </span>
             )}
@@ -349,7 +349,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                         {item.semantic_bucket && topic && (
                           <button
                             onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(item.semantic_bucket) } })}
-                            className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                            className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
                             title={item.semantic_bucket}
                           >
                             {bucketLabel(item.semantic_bucket)}
@@ -358,7 +358,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                         {topic && (
                           <button
                             onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
-                            className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
+                            className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
                           >
                             开始本轮训练
                           </button>
@@ -392,7 +392,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                         {item.semantic_bucket && topic && (
                           <button
                             onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(item.semantic_bucket) } })}
-                            className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                            className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
                             title={item.semantic_bucket}
                           >
                             {bucketLabel(item.semantic_bucket)}
@@ -410,7 +410,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                         {topic && (
                           <button
                             onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
-                            className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
+                            className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
                           >
                             开始本轮训练
                           </button>
@@ -527,7 +527,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                 {s.semantic_bucket && topic && (
                   <button
                     onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })}
-                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                    className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
                     title={s.semantic_bucket}
                   >
                     {bucketLabel(s.semantic_bucket)}
@@ -536,7 +536,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                 {topic && (
                   <button
                     onClick={() => navigate(`/profile/topic/${topic}`)}
-                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                    className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
                   >
                     看专题
                   </button>
@@ -544,7 +544,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                 {topic && (
                   <button
                     onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })}
-                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-hover text-dim border-none cursor-pointer"
+                    className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-hover text-dim border-none cursor-pointer"
                   >
                     先看题库
                   </button>
@@ -552,7 +552,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
                 {topic && (
                   <button
                     onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
-                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
+                    className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
                   >
                     去修复
                   </button>
