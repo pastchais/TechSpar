@@ -105,7 +105,7 @@ function DimensionScores({ dimensionScores, avgScore }) {
   if (!entries.length) return null;
 
   return (
-    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-7 mb-6">
+    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
       <div className="text-lg font-semibold mb-4">
         维度评分
         {avgScore != null && (
@@ -133,7 +133,7 @@ function AutoScoreCard({ autoScore }) {
   if (!autoScore || !Object.keys(autoScore).length) return null;
   const entries = Object.entries(AUTO_SCORE_LABELS).filter(([k]) => autoScore[k] != null);
   return (
-    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-7 mb-6">
+    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="text-lg font-semibold">自动评分</div>
         <div className="text-sm text-dim">总分 {autoScore.total_score ?? "-"}/25 · {autoScore.summary || ""}</div>
@@ -155,7 +155,7 @@ function AutoScoreCard({ autoScore }) {
       {autoScore.reason && <div className="mt-4 text-sm text-text leading-[1.8]">{autoScore.reason}</div>}
       {autoScore.missing_points?.length > 0 && (
         <div className="mt-4">
-          <div className="text-sm font-medium mb-2">漏掉的关键点</div>
+          <div className="text-[15px] font-medium mb-2">漏掉的关键点</div>
           <div className="flex flex-col gap-1.5">
             {autoScore.missing_points.map((item, idx) => (
               <div key={idx} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">{item}</div>
@@ -165,7 +165,7 @@ function AutoScoreCard({ autoScore }) {
       )}
       {autoScore.improvements?.length > 0 && (
         <div className="mt-4">
-          <div className="text-sm font-medium mb-2">改进建议</div>
+          <div className="text-[15px] font-medium mb-2">改进建议</div>
           <div className="flex flex-col gap-1.5">
             {autoScore.improvements.map((item, idx) => (
               <div key={idx} className="px-3 py-2 rounded-lg text-[13px] text-text bg-accent/8 border border-accent/20">{item}</div>
@@ -185,7 +185,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
   return (
     <>
       {/* Overall summary */}
-      <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-8 md:py-7 mb-6">
+      <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
         <div className="text-lg font-semibold mb-3">整体评价</div>
         <div>
           <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
@@ -201,7 +201,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
       {/* Weak & strong points */}
       {overall?.new_weak_points?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-4 mt-2 text-text">薄弱点</div>
+          <div className="text-base font-semibold mb-3 mt-2 text-text">薄弱点</div>
           <div className="flex flex-col gap-1.5 mb-4">
             {overall.new_weak_points.map((wp, i) => (
               <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">
@@ -213,7 +213,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
       )}
       {overall?.new_strong_points?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-4 mt-2 text-text">亮点</div>
+          <div className="text-base font-semibold mb-3 mt-2 text-text">亮点</div>
           <div className="flex flex-col gap-1.5 mb-4">
             {overall.new_strong_points.map((sp, i) => (
               <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/8 border border-green/20">
@@ -227,12 +227,12 @@ function SoloRecordingReview({ topicsCovered, overall }) {
       {/* Topics covered */}
       {topicsCovered?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-4 mt-2 text-text">涉及知识点</div>
+          <div className="text-base font-semibold mb-3 mt-2 text-text">涉及知识点</div>
           {topicsCovered.map((t, i) => {
             const score = t.score;
             const sc = typeof score === "number" ? getScoreColor(score) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
             return (
-              <div key={i} className="bg-card border border-border rounded-xl px-4 py-5 md:px-6 mb-4 animate-fade-in">
+              <div key={i} className="bg-card border border-border rounded-xl px-4 py-4 md:px-5 mb-4 animate-fade-in">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[15px] font-medium">{topicDisplayName(t.topic, topics) || "未知知识点"}</span>
                   <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
@@ -277,7 +277,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
   return (
     <>
       {/* Overall summary */}
-      <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-8 md:py-7 mb-6">
+      <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
         <div className="text-lg font-semibold mb-3">整体评价</div>
         <div>
           <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
@@ -300,7 +300,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
 
       {/* Targeting stats */}
       {overall?.targeting_stats && (
-        <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-8 md:py-7 mb-6">
+        <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
           <div className="text-base font-semibold mb-3">针对性训练命中</div>
           {overall.targeting_stats.focus_label && (
             <div className="mb-4 rounded-xl border border-green/20 bg-green/5 px-4 py-3">
@@ -330,7 +330,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
           </div>
           {overall.targeting_stats.strategy_snapshot?.length > 0 && (
             <div className="mb-3">
-              <div className="text-sm font-medium mb-2">本场重点覆盖 weak points</div>
+              <div className="text-[15px] font-medium mb-2">本场重点覆盖 weak points</div>
               <div className="flex flex-col gap-1.5">
                 {overall.targeting_stats.strategy_snapshot.map((item, idx) => {
                   const badge = strategyBadge(item.adaptive_strategy);
@@ -373,7 +373,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
           )}
           {overall.targeting_stats.matched_items?.length > 0 && (
             <div>
-              <div className="text-sm font-medium mb-2">命中结果</div>
+              <div className="text-[15px] font-medium mb-2">命中结果</div>
               <div className="flex flex-col gap-1.5">
                 {overall.targeting_stats.matched_items.map((item, idx) => {
                   const badge = strategyBadge(item.adaptive_strategy);
@@ -429,7 +429,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
       {/* Weak points */}
       {overall?.new_weak_points?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-4 mt-2 text-text">薄弱点</div>
+          <div className="text-base font-semibold mb-3 mt-2 text-text">薄弱点</div>
           <div className="flex flex-col gap-1.5 mb-4">
             {overall.new_weak_points.map((wp, i) => (
               <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">
@@ -443,7 +443,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
       {/* Strong points */}
       {overall?.new_strong_points?.length > 0 && (
         <>
-          <div className="text-base font-semibold mb-4 mt-2 text-text">亮点</div>
+          <div className="text-base font-semibold mb-3 mt-2 text-text">亮点</div>
           <div className="flex flex-col gap-1.5 mb-4">
             {overall.new_strong_points.map((sp, i) => (
               <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/8 border border-green/20">
@@ -455,7 +455,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
       )}
 
       {/* Per-question cards */}
-      <div className="text-base font-semibold mb-4 mt-2 text-text">逐题复盘</div>
+      <div className="text-base font-semibold mb-3 mt-2 text-text">逐题复盘</div>
       {(questions || []).map((q) => {
         const s = scoreMap[q.id] || {};
         const answer = answerMap[q.id];
@@ -465,7 +465,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
 
         if (isSkipped) {
           return (
-            <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-3 md:px-6 mb-4 opacity-50 flex items-center justify-between animate-fade-in">
+            <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-3 md:px-5 mb-4 opacity-50 flex items-center justify-between animate-fade-in">
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
                 <span className="text-sm text-dim">{q.question.slice(0, 50)}{q.question.length > 50 ? "..." : ""}</span>
@@ -476,7 +476,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
         }
 
         return (
-          <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-5 md:px-6 mb-4 animate-fade-in">
+          <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-4 md:px-5 mb-4 animate-fade-in">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
@@ -496,7 +496,7 @@ function DrillReview({ scores, overall, questions, answers, topic, topics }) {
 
             <div className="text-[15px] font-medium leading-relaxed mb-3">{q.question}</div>
 
-            <div className="bg-hover rounded-lg px-3 py-3 md:px-4 mb-3">
+            <div className="bg-hover rounded-lg px-3 py-3 md:px-3.5 mb-3">
               <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
               <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
             </div>

@@ -465,7 +465,7 @@ export default function Knowledge() {
               </div>
 
               {readingPlan.length > 0 && (
-                <div className="mb-4 rounded-box border border-accent/30 bg-accent/5 p-4">
+                <div className="mb-4 rounded-box border border-accent/30 bg-accent/5 px-4 py-4 md:px-5">
                   <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                     <div>
                       <div className="text-sm font-semibold text-text mb-1">推荐阅读顺序</div>
@@ -568,7 +568,7 @@ export default function Knowledge() {
                         </div>
                       </div>
                       {expandedFile === f.filename && (
-                        <div className="border-t border-border p-4">
+                        <div className="border-t border-border px-4 py-4 md:px-5">
                           {searchTerm.trim() && (
                             <div className="mb-3 text-[12px] text-dim">
                               当前定位关键词：<HighlightText text={searchTerm} terms={searchAliases} />
@@ -579,7 +579,7 @@ export default function Knowledge() {
                             value={editContent[f.filename] ?? f.content}
                             onChange={(e) => setEditContent((prev) => ({ ...prev, [f.filename]: e.target.value }))}
                           />
-                          <div className="flex gap-2 mt-3 justify-end">
+                          <div className="flex gap-2 mt-3 justify-end flex-wrap">
                             {coreSaving === f.filename && <span className="text-xs text-green self-center mr-3">已保存</span>}
                             <button className="px-5 py-2 rounded-lg bg-accent text-white text-[13px] cursor-pointer" onClick={() => handleSaveCore(f.filename)}>保存</button>
                           </div>
@@ -601,7 +601,7 @@ export default function Knowledge() {
                 onChange={(e) => setHighFreqDraft(e.target.value)}
                 placeholder={"# 高频题\n\n## 1. xxx原理是什么？为什么这样设计？\n\n## 2. 实际项目中遇到xxx问题怎么解决？"}
               />
-              <div className="flex gap-2 mt-3 justify-end">
+              <div className="flex gap-2 mt-3 justify-end flex-wrap">
                 {hfSaving && <span className="text-xs text-green self-center mr-3">已保存</span>}
                 {highFreqDraft !== highFreq && (
                   <button className="px-5 py-2 rounded-lg border border-border bg-hover text-text text-[13px] cursor-pointer" onClick={() => setHighFreqDraft(highFreq)}>撤销修改</button>
