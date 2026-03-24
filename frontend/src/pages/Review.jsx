@@ -213,14 +213,79 @@ function PracticeComparisonCard({ comparison }) {
   );
 }
 
+function analyzePracticeTrend(items = []) {
+  const scored = items
+    .map((item) => ({ ...item, avg_score: typeof item.avg_score === "number" ? item.avg_score : null }))
+    .filter((item) => item.avg_score != null);
+  if (scored.length < 2) {
+    return {
+      label: "样本不足",
+      tone: "text-dim",
+      summary: "还需要至少两次同目标复练，才能判断趋势。",
+      advice: "先继续做 1-2 次同一 focus 的短打复练。",
+    };
+  }
+
+  const recent = scored.slice(-5);
+  const first = recent[0].avg_score;
+  const last = recent[recent.length - 1].avg_score;
+  const delta = Number((last - first).toFixed(1));
+  let upSteps = 0;
+  let downSteps = 0;
+  let flatSteps = 0;
+  for (let i = 1; i < recent.length; i += 1) {
+    const diff = recent[i].avg_score - recent[i - 1].avg_score;
+    if (diff >= 0.6) upSteps += 1;
+    else if (diff <= -0.6) downSteps += 1;
+    else flatSteps += 1;
+  }
+
+  if (delta >= 1.2 && upSteps >= Math.max(1, recent.length - 2)) {
+    return {
+      label: "持续上升",
+      tone: "text-green",
+      summary: `最近 ${recent.length} 次同目标复练整体呈上升趋势（${delta >= 0 ? "+" : ""}${delta} 分）。`,
+      advice: "可以减少同类重复题，转向更深一层的 why / 边界 / 追问。",
+    };
+  }
+  if (delta <= -1.2 && downSteps >= Math.max(1, recent.length - 2)) {
+    return {
+      label: "出现回退",
+      tone: "text-red",
+      summary: `最近 ${recent.length} 次同目标复练整体在回落（${delta} 分）。`,
+      advice: "建议回到更基础的口语化表达和关键点复述，先稳住再加压。",
+    };
+  }
+  if (upSteps > 0 && downSteps > 0) {
+    return {
+      label: "波动明显",
+      tone: "text-accent-light",
+      summary: `最近 ${recent.length} 次分数有起伏（净变化 ${delta >= 0 ? "+" : ""}${delta} 分）。`,
+      advice: "说明理解可能还不稳定，建议固定同一种答题结构，再做 1-2 轮验收。",
+    };
+  }
+  return {
+    label: "进入平台期",
+    tone: "text-dim",
+    summary: `最近 ${recent.length} 次表现基本持平（净变化 ${delta >= 0 ? "+" : ""}${delta} 分）。`,
+    advice: "别再刷同一层问题了，应该改成更刁钻的追问或项目化表达训练。",
+  };
+}
+
 function PracticeTrendCard({ focusLabel, items = [] }) {
   if (!focusLabel || !items.length) return null;
   const recent = items.slice(-5);
+  const trend = analyzePracticeTrend(recent);
   return (
     <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <div className="text-lg font-semibold">同一目标复练轨迹</div>
         <div className="text-sm text-dim">{focusLabel}</div>
+      </div>
+      <div className="mb-4 rounded-xl border border-border bg-hover px-4 py-3">
+        <div className={`text-sm font-semibold mb-1 ${trend.tone}`}>轨迹判断：{trend.label}</div>
+        <div className="text-[13px] text-text leading-[1.7]">{trend.summary}</div>
+        <div className="text-[12px] text-dim mt-1.5">建议：{trend.advice}</div>
       </div>
       <div className="flex items-end gap-2 h-28 mb-3">
         {recent.map((item, idx) => {
