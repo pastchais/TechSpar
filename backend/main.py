@@ -1231,6 +1231,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
                 user_id,
                 focus_keyword=req.focus_keyword,
                 focus_label=req.focus_label,
+                focus_trend=req.focus_trend,
                 practice_context=req.practice_context,
             )
         except RuntimeError as e:
@@ -1248,6 +1249,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
             "user_id": user_id,
             "focus_keyword": req.focus_keyword,
             "focus_label": req.focus_label,
+            "focus_trend": req.focus_trend,
             "practice_context": req.practice_context,
             "practice_baseline": practice_baseline,
         }
@@ -1259,6 +1261,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
             "questions": questions,
             "focus_keyword": req.focus_keyword,
             "focus_label": req.focus_label,
+            "focus_trend": req.focus_trend,
             "practice_baseline": practice_baseline,
         }
     else:

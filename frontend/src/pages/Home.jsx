@@ -30,6 +30,7 @@ export default function Home() {
   const [profile, setProfile] = useState(null);
   const [quickFocus, setQuickFocus] = useState("");
   const [quickFocusLabel, setQuickFocusLabel] = useState("");
+  const [quickFocusTrend, setQuickFocusTrend] = useState("");
   const [presetNotice, setPresetNotice] = useState("");
   const [summaryFlash, setSummaryFlash] = useState(false);
   const topicSectionRef = useRef(null);
@@ -50,11 +51,13 @@ export default function Home() {
     const quickTopic = location.state?.quickStartTopic;
     const quickFocusKeyword = location.state?.quickStartFocusKeyword || "";
     const quickFocusLabelText = location.state?.quickStartFocusLabel || "";
+    const quickFocusTrendText = location.state?.quickStartFocusTrend || "";
     if (quickMode === "topic_drill") {
       setMode("topic_drill");
       if (quickTopic) setSelectedTopic(quickTopic);
       setQuickFocus(quickFocusKeyword);
       setQuickFocusLabel(quickFocusLabelText);
+      setQuickFocusTrend(quickFocusTrendText);
       setPresetNotice(quickFocusKeyword || quickTopic ? "已应用推荐训练目标" : "");
       setTimeout(() => scrollToSummary(), 120);
       navigate(location.pathname, { replace: true, state: {} });
@@ -76,18 +79,20 @@ export default function Home() {
     }
   };
 
-  const launchInterview = async (launchMode, launchTopic, focusKeyword = "", focusLabel = "") => {
+  const launchInterview = async (launchMode, launchTopic, focusKeyword = "", focusLabel = "", focusTrend = "") => {
     setLoading(true);
     try {
       const data = await startInterview(launchMode, launchTopic, {
         focusKeyword,
         focusLabel,
+        focusTrend,
       });
       navigate(`/interview/${data.session_id}`, {
         state: {
           ...data,
           quickFocusKeyword: focusKeyword,
           quickFocusLabel: focusLabel,
+          quickFocusTrend: focusTrend,
         },
       });
     } catch (err) {
@@ -100,7 +105,7 @@ export default function Home() {
   const handleStart = async () => {
     if (!mode) return;
     if (mode === "topic_drill" && !selectedTopic) return;
-    await launchInterview(mode, selectedTopic, quickFocus, quickFocusLabel);
+    await launchInterview(mode, selectedTopic, quickFocus, quickFocusLabel, quickFocusTrend);
   };
 
   const scrollToSummary = () => {
@@ -382,6 +387,7 @@ export default function Home() {
                         primaryRecommendation.topic,
                         primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "",
                         primaryRecommendation.focus_label || "",
+                        primaryRecommendation.trend_label || "",
                       )}
                       className="bg-green/10 py-1.5 text-[12px] text-green hover:text-green"
                     >
@@ -395,6 +401,7 @@ export default function Home() {
                         setSelectedTopic(primaryRecommendation.topic);
                         setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
                         setQuickFocusLabel(primaryRecommendation.focus_label || "");
+                        setQuickFocusTrend(primaryRecommendation.trend_label || "");
                         setPresetNotice("已应用推荐训练目标");
                         setTimeout(() => scrollToSummary(), 100);
                       }}
@@ -481,6 +488,7 @@ export default function Home() {
                   setSelectedTopic(primaryRecommendation.topic);
                   setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
                   setQuickFocusLabel(primaryRecommendation.focus_label || "");
+                  setQuickFocusTrend(primaryRecommendation.trend_label || "");
                   setPresetNotice("已应用推荐训练目标");
                   setTimeout(() => scrollToSummary(), 120);
                 }}
@@ -516,10 +524,12 @@ export default function Home() {
                       if (primaryRecommendation?.topic === key) {
                         setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
                         setQuickFocusLabel(primaryRecommendation.focus_label || "");
+                        setQuickFocusTrend(primaryRecommendation.trend_label || "");
                         setPresetNotice("已应用推荐训练目标");
                       } else {
                         setQuickFocus("");
                         setQuickFocusLabel("");
+                        setQuickFocusTrend("");
                         setPresetNotice("");
                       }
                       setTimeout(() => scrollToSummary(), 100);

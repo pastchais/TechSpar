@@ -104,6 +104,7 @@ export async function startInterview(mode, topic = null, focus = {}) {
       topic,
       focus_keyword: focus.focusKeyword || "",
       focus_label: focus.focusLabel || "",
+      focus_trend: focus.focusTrend || "",
       practice_context: focus.practiceContext || "",
       practice_baseline: focus.practiceBaseline || null,
     }),

@@ -56,7 +56,7 @@ def _load_high_freq(topic: str, user_id: str) -> str:
     return ""
 
 
-def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None = None, focus_label: str | None = None, practice_context: str | None = None) -> list[dict]:
+def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None = None, focus_label: str | None = None, focus_trend: str | None = None, practice_context: str | None = None) -> list[dict]:
     """Generate 10 personalized questions for a topic. 1 LLM call."""
     from backend.spaced_repetition import get_due_reviews, init_sr_for_existing_points
 
@@ -211,6 +211,27 @@ def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None
     question_strategy = question_strategy + "\n- 自适应训练策略：\n" + "\n".join(f"  {note}" for note in adaptive_notes)
     if focus_seed:
         question_strategy += f"\n- 本次训练显式修复目标：优先围绕「{focus_seed}」出前几题，至少覆盖其相关概念辨析、工程落地或边界追问。"
+    focus_trend = (focus_trend or "").strip()
+    if focus_trend == "进入平台期":
+        question_strategy += (
+            "\n- 当前 focus 处于平台期：减少同层概念确认题，优先出 why 型追问、边界条件题、反例题、项目化场景题，"
+            "用更换角度和更强约束来打破平台，不要再重复基础确认。"
+        )
+    elif focus_trend == "出现回退":
+        question_strategy += (
+            "\n- 当前 focus 有回退迹象：前半程先用基础概念辨析题、稳定表达题、低复杂度应用题重新稳住，"
+            "避免一上来就复杂架构或多条件系统设计题。"
+        )
+    elif focus_trend == "持续上升":
+        question_strategy += (
+            "\n- 当前 focus 正在持续上升：可以减少基础修复题，增加迁移题、跨场景题、工程权衡题，"
+            "验证候选人是否能把理解迁移到新语境。"
+        )
+    elif focus_trend == "波动明显":
+        question_strategy += (
+            "\n- 当前 focus 波动明显：同一个知识点要从不同角度重复验收，但保持中等难度，"
+            "重点验证是否真的稳定，而不是偶尔答对。"
+        )
     if (practice_context or "").strip():
         question_strategy += (
             "\n- 本轮为带着改进版答案再练：请围绕候选人刚整理出的改进版回答，优先设计能检验其是否真正内化的题，"

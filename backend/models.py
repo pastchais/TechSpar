@@ -57,6 +57,7 @@ class StartInterviewRequest(BaseModel):
     topic: str | None = None
     focus_keyword: str | None = None
     focus_label: str | None = None
+    focus_trend: str | None = None
     practice_context: str | None = None
     practice_baseline: dict | None = None
 
