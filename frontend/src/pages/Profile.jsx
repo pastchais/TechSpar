@@ -213,7 +213,14 @@ function WeakPointDetailContent({ w, navigate, nextTone }) {
             </span>
             <span className="text-[11px] text-dim">命中率 {(Number(w.best_focus.focus_hit_rate || 0) * 100).toFixed(0)}%</span>
             <span className="text-[11px] text-dim">回升率 {(Number(w.best_focus.improvement_rate || 0) * 100).toFixed(0)}%</span>
+            {w.best_focus.trend_label && <span className="text-[11px] text-dim">轨迹：{w.best_focus.trend_label}</span>}
           </div>
+          {w.best_focus.trend_summary && (
+            <div className="mt-1.5 text-[12px] text-dim leading-[1.7]">
+              {w.best_focus.trend_summary}
+              {w.best_focus.trend_advice ? ` · ${w.best_focus.trend_advice}` : ""}
+            </div>
+          )}
           {w.focus_effectiveness?.length > 1 && (
             <div className="flex flex-wrap gap-1.5 mt-1">
               {w.focus_effectiveness.slice(0, 3).map((f, idx) => (
@@ -221,9 +228,9 @@ function WeakPointDetailContent({ w, navigate, nextTone }) {
                   key={`${f.focus_label}-${idx}`}
                   onClick={() => w.topic && navigate("/knowledge", { state: { selectedTopic: w.topic, searchKeyword: f.focus_label } })}
                   className="px-2 py-0.5 rounded text-[11px] font-medium bg-hover text-dim border-none cursor-pointer max-w-full break-words text-left sm:max-w-[220px] sm:truncate"
-                  title={`${f.focus_label} · 命中率 ${(Number(f.focus_hit_rate || 0) * 100).toFixed(0)}% · 回升率 ${(Number(f.improvement_rate || 0) * 100).toFixed(0)}%`}
+                  title={`${f.focus_label} · 命中率 ${(Number(f.focus_hit_rate || 0) * 100).toFixed(0)}% · 回升率 ${(Number(f.improvement_rate || 0) * 100).toFixed(0)}%${f.trend_label ? ` · 轨迹 ${f.trend_label}` : ""}`}
                 >
-                  {f.focus_label} · {(Number(f.improvement_rate || 0) * 100).toFixed(0)}%
+                  {f.focus_label} · {(Number(f.improvement_rate || 0) * 100).toFixed(0)}%{f.trend_label ? ` · ${f.trend_label}` : ""}
                 </button>
               ))}
             </div>

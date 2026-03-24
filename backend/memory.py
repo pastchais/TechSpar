@@ -184,6 +184,49 @@ def _bucket_label(bucket: str | None) -> str:
     return labels.get(bucket or "", bucket or "")
 
 
+def _classify_focus_trend(scores: list[float]) -> dict:
+    vals = [float(x) for x in scores if isinstance(x, (int, float))]
+    if len(vals) < 2:
+        return {
+            "label": "样本不足",
+            "summary": "还需要至少两次同 focus 训练才能判断趋势。",
+            "advice": "先继续做 1-2 次同一 focus 的短打复练。",
+        }
+    recent = vals[-5:]
+    delta = round(recent[-1] - recent[0], 1)
+    up_steps = 0
+    down_steps = 0
+    for idx in range(1, len(recent)):
+        diff = recent[idx] - recent[idx - 1]
+        if diff >= 0.6:
+            up_steps += 1
+        elif diff <= -0.6:
+            down_steps += 1
+    if delta >= 1.2 and up_steps >= max(1, len(recent) - 2):
+        return {
+            "label": "持续上升",
+            "summary": f"最近 {len(recent)} 次同 focus 表现整体上升（{delta:+.1f} 分）。",
+            "advice": "可以减少同类重复题，转向更深的 why / 边界 / 追问。",
+        }
+    if delta <= -1.2 and down_steps >= max(1, len(recent) - 2):
+        return {
+            "label": "出现回退",
+            "summary": f"最近 {len(recent)} 次同 focus 表现回落（{delta:+.1f} 分）。",
+            "advice": "建议回到基础概念和更稳定的口语表达，先稳住再加压。",
+        }
+    if up_steps > 0 and down_steps > 0:
+        return {
+            "label": "波动明显",
+            "summary": f"最近 {len(recent)} 次同 focus 有明显波动（{delta:+.1f} 分）。",
+            "advice": "说明理解还不够稳定，建议固定同一种答题结构连续验收。",
+        }
+    return {
+        "label": "进入平台期",
+        "summary": f"最近 {len(recent)} 次同 focus 基本持平（{delta:+.1f} 分）。",
+        "advice": "别再刷同一层问题，应该升级为更刁钻的追问或项目化表达训练。",
+    }
+
+
 def _build_next_focus_recommendation(wp: dict) -> dict | None:
     candidates = [x for x in (wp.get("focus_effectiveness") or []) if isinstance(x, dict)]
     priority_score = float(wp.get("priority_score", 0.0) or 0.0)
@@ -217,6 +260,8 @@ def _build_next_focus_recommendation(wp: dict) -> dict | None:
             reason_bits.append(f"该 focus 历史命中率 {(float(best.get('focus_hit_rate', 0.0)) * 100):.0f}%")
         if best.get("improvement_rate") is not None:
             reason_bits.append(f"回升率 {(float(best.get('improvement_rate', 0.0)) * 100):.0f}%")
+        if best.get("trend_label"):
+            reason_bits.append(f"当前轨迹：{best.get('trend_label')}")
         if best.get("last_front3_focus_hits"):
             reason_bits.append(f"最近一轮前3题命中 {int(best.get('last_front3_focus_hits', 0) or 0)} 次")
         return {
@@ -353,6 +398,7 @@ def _refresh_weak_point_aggregates(profile: dict):
         for stat in focus_stats.values():
             attempts = max(int(stat["attempts"]), 1)
             avg_score = round(sum(stat["scores"]) / len(stat["scores"]), 1) if stat["scores"] else None
+            trend = _classify_focus_trend(stat["scores"])
             focus_effectiveness.append({
                 "focus_label": stat["focus_label"],
                 "focus_keyword": stat["focus_keyword"],
@@ -364,6 +410,9 @@ def _refresh_weak_point_aggregates(profile: dict):
                 "avg_score": avg_score,
                 "topic_level": bool(stat.get("topic_level", False)),
                 "last_front3_focus_hits": stat.get("last_front3_focus_hits", 0),
+                "trend_label": trend["label"],
+                "trend_summary": trend["summary"],
+                "trend_advice": trend["advice"],
             })
         focus_effectiveness.sort(key=lambda x: (-x.get("improvement_rate", 0), -x.get("focus_hit_rate", 0), -(x.get("attempts", 0))))
         wp["focus_effectiveness"] = focus_effectiveness[:5]
