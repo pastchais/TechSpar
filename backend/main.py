@@ -1179,6 +1179,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
                 user_id,
                 focus_keyword=req.focus_keyword,
                 focus_label=req.focus_label,
+                practice_context=req.practice_context,
             )
         except RuntimeError as e:
             raise HTTPException(500, str(e))
@@ -1189,6 +1190,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
             "user_id": user_id,
             "focus_keyword": req.focus_keyword,
             "focus_label": req.focus_label,
+            "practice_context": req.practice_context,
         }
 
         return {

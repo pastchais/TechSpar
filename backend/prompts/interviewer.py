@@ -162,6 +162,9 @@ DRILL_QUESTION_GEN_PROMPT = """你是「{topic_name}」领域的技术专家，�
 ## 历史训练洞察（语义检索，来自过去面试）
 {past_insights}
 
+## 本轮复练上下文（如果有）
+{practice_context}
+
 ## 任务
 生成 10 道面试题，返回 JSON 数组。
 

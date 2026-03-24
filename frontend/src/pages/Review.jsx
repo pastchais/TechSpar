@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { PageTitle, SectionTitle, SubtleButton } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
-import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics } from "../api/interview";
+import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
 
 function getScoreColor(score) {
@@ -385,6 +385,22 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
     setImprovedLoading((p) => ({ ...p, [qId]: false }));
   };
 
+  const handlePracticeImprovedAnswer = async (qId, questionText, focusArea = "") => {
+    const improved = improvedAnswers[qId]?.improved_answer || "";
+    const focusLabel = scoreMap[qId]?.weak_point || focusArea || "改进版回答复练";
+    if (!improved || !topic) return;
+    try {
+      const data = await startInterview("topic_drill", topic, {
+        focusKeyword: `${questionText} ${focusLabel}`,
+        focusLabel,
+        practiceContext: `原题：${questionText}\n\n你的原回答：${answerMap[qId] || "（无）"}\n\n改进版答案：${improved}`,
+      });
+      navigate(`/interview/${data.session_id}`, { state: data });
+    } catch (e) {
+      alert(`启动复练失败：${e.message}`);
+    }
+  };
+
   const avgScore = overall?.avg_score || "-";
 
   return (
@@ -726,6 +742,14 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
                         </div>
                         <div className="md-content rounded-lg bg-card px-3.5 py-3">
                           <ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
+                            onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}
+                          >
+                            <BookOpen size={13} /> 带着这版再练一遍
+                          </button>
                         </div>
                       </div>
                     )}

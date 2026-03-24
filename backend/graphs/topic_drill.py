@@ -56,7 +56,7 @@ def _load_high_freq(topic: str, user_id: str) -> str:
     return ""
 
 
-def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None = None, focus_label: str | None = None) -> list[dict]:
+def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None = None, focus_label: str | None = None, practice_context: str | None = None) -> list[dict]:
     """Generate 10 personalized questions for a topic. 1 LLM call."""
     from backend.spaced_repetition import get_due_reviews, init_sr_for_existing_points
 
@@ -211,6 +211,13 @@ def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None
     question_strategy = question_strategy + "\n- 自适应训练策略：\n" + "\n".join(f"  {note}" for note in adaptive_notes)
     if focus_seed:
         question_strategy += f"\n- 本次训练显式修复目标：优先围绕「{focus_seed}」出前几题，至少覆盖其相关概念辨析、工程落地或边界追问。"
+    if (practice_context or "").strip():
+        question_strategy += (
+            "\n- 本轮为带着改进版答案再练：请围绕候选人刚整理出的改进版回答，优先设计能检验其是否真正内化的题，"
+            "包括换角度追问、边界条件、项目落地和 why 型问题；不要简单重复原题。"
+        )
+
+    practice_context_text = (practice_context or "").strip() or "暂无"
 
     prompt = DRILL_QUESTION_GEN_PROMPT.format(
         topic_name=topic_name,
@@ -223,6 +230,7 @@ def generate_drill_questions(topic: str, user_id: str, focus_keyword: str | None
         high_freq_questions=high_freq,
         recent_questions="\n".join(f"- {q}" for q in drill_ctx["recent_questions"][-10:]) or "暂无",
         past_insights=past_insights_text,
+        practice_context=practice_context_text,
         question_strategy=question_strategy,
         diff_min=diff_min,
         diff_max=diff_max,
