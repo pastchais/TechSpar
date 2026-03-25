@@ -365,6 +365,89 @@ export default function Home() {
           </SurfaceCard>
         )}
 
+        {profile?.stats?.total_sessions > 0 && (
+          <SurfaceCard className="mt-4 px-4 py-4 md:px-5 md:py-5 border-border/80 bg-card/75">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-[15px] font-semibold text-text">当前状态与推荐起点</div>
+                  <div className="mt-1 text-[12px] leading-[1.7] text-dim">模式和起点一起决定本轮训练从哪里切入，不再拆成两个入口。</div>
+                </div>
+                <SubtleButton onClick={() => navigate("/profile")} className="py-1.5 text-[12px]">
+                  查看画像 <ChevronRight size={14} />
+                </SubtleButton>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <SurfaceCard className="px-4 py-4 bg-card/85">
+                  <div className="text-[12px] text-dim">总练习</div>
+                  <div className="mt-2 text-[22px] font-bold text-accent-light">{stats.total_sessions}</div>
+                </SurfaceCard>
+                <SurfaceCard className="px-4 py-4 bg-card/85">
+                  <div className="text-[12px] text-dim">综合平均</div>
+                  <div className="mt-2 text-[22px] font-bold text-green">{stats.avg_score || "-"}</div>
+                </SurfaceCard>
+                <SurfaceCard className="px-4 py-4 bg-card/85">
+                  <div className="text-[12px] text-dim">上次得分</div>
+                  <div className={`mt-2 text-[22px] font-bold ${lastEntry?.avg_score >= 6 ? "text-green" : "text-orange"}`}>{lastEntry?.avg_score ?? "-"}</div>
+                </SurfaceCard>
+                <SurfaceCard className="px-4 py-4 bg-card/85">
+                  <div className="text-[12px] text-dim">当前最该关注</div>
+                  <div className="mt-2 text-[14px] font-semibold text-text break-words">{topTopics[0] ? (topics[topTopics[0][0]]?.name || topTopics[0][0]) : "等待更多练习"}</div>
+                </SurfaceCard>
+              </div>
+
+              {primaryRecommendation && (
+                <div className="rounded-2xl border border-green/20 bg-green/5 px-4 py-4 md:px-5">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1.5 flex items-center gap-2 flex-wrap">
+                        <span className="text-[15px] font-semibold text-text">推荐起点</span>
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${recommendationBadge(primaryRecommendation.confidence)}`}>
+                          {primaryRecommendation.confidence === "high" ? "高置信推荐" : primaryRecommendation.confidence === "medium" ? "可尝试" : "探索建议"}
+                        </span>
+                        {primaryRecommendation.topic && <Badge tone="accent">{topics[primaryRecommendation.topic]?.name || primaryRecommendation.topic}</Badge>}
+                      </div>
+                      <div className="text-[14px] font-medium text-text">{primaryRecommendation.focus_label || primaryRecommendation.title}</div>
+                      {recommendationTrend && <div className="mt-1 text-[12px] font-medium text-accent-light">{recommendationActionText} · {recommendationTrend}</div>}
+                      <div className="mt-1 text-[12px] leading-[1.7] text-dim">
+                        {primaryRecommendation.why_now || primaryRecommendation.reason || "根据你的近期画像，优先从这个目标开始更划算。"}
+                        {recommendationSecondaryHint ? ` ${recommendationSecondaryHint}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {primaryRecommendation.topic && (
+                        <SubtleButton
+                          onClick={() => {
+                            setMode("topic_drill");
+                            setSelectedTopic(primaryRecommendation.topic);
+                            setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
+                            setQuickFocusLabel(primaryRecommendation.focus_label || "");
+                            setQuickFocusTrend(primaryRecommendation.trend_label || "");
+                            setPresetNotice("已应用推荐训练目标");
+                            setTimeout(() => scrollToSummary(), 100);
+                          }}
+                          className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light"
+                        >
+                          用它作为本轮起点
+                        </SubtleButton>
+                      )}
+                      {primaryRecommendation.topic && (
+                        <SubtleButton
+                          onClick={() => navigate("/knowledge", { state: { selectedTopic: primaryRecommendation.topic, searchKeyword: primaryRecommendation.pre_read_keyword || primaryRecommendation.focus_label } })}
+                          className="py-1.5 text-[12px]"
+                        >
+                          先看题库
+                        </SubtleButton>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </SurfaceCard>
+        )}
+
         <div className="mt-4 flex justify-center">
           <SubtleButton onClick={() => navigate("/recording")}>
             录音复盘工具 <ChevronRight size={14} />
@@ -373,127 +456,9 @@ export default function Home() {
 
         </AppSection>
 
-      {profile?.stats?.total_sessions > 0 && (
-        <AppSection
-          title="2. 先看当前状态与推荐起点"
-          subtitle="别从全部信息里自己找入口。先看最近状态，再决定这一轮最值得从哪一点切入。"
-          className="w-full max-w-[700px]"
-        >
-          <div className="flex flex-col gap-3">
-            <SurfaceCard className={`px-5 py-5 md:px-6 transition-all ${mode ? "opacity-95" : ""}`}>
-            <div className="flex justify-between items-center mb-3.5 gap-3 flex-wrap">
-              <span className="text-[15px] font-semibold">先看当前状态</span>
-              <span
-                className="text-[13px] text-accent-light cursor-pointer"
-                onClick={() => navigate("/profile")}
-              >
-                查看画像 <ChevronRight size={14} className="inline align-middle" />
-              </span>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4 md:gap-6">
-              <div className="text-center sm:text-left min-w-[60px]">
-                <div className="text-2xl font-bold text-accent-light">{stats.total_sessions}</div>
-                <div className="text-[11px] text-dim mt-0.5">总练习</div>
-              </div>
-              <div className="text-center sm:text-left min-w-[60px]">
-                <div className="text-2xl font-bold text-green">{stats.avg_score || "-"}</div>
-                <div className="text-[11px] text-dim mt-0.5">综合平均</div>
-              </div>
-              {topTopics.length > 0 && (
-                <div className="flex-1 min-w-0 sm:min-w-[180px]">
-                  <div className="text-[11px] text-dim mb-1.5">当前更该关注</div>
-                  {topTopics.map(([t, d], idx) => (
-                    <div key={t} className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs w-[84px] sm:w-[90px] break-words leading-4 ${idx === 0 ? "text-orange" : "text-text"}`}>{topics[t]?.name || t}</span>
-                      <div className="flex-1 h-1 rounded-sm bg-border overflow-hidden">
-                        <div className={`h-full rounded-sm ${idx === 0 ? "bg-orange" : "bg-accent-light"}`} style={{ width: `${d.score || 0}%` }} />
-                      </div>
-                      <span className="text-[11px] text-dim w-7">{d.score || 0}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {lastEntry && (
-                <div className="text-center sm:text-left min-w-[80px]">
-                  <div className={`text-2xl font-bold ${lastEntry.avg_score >= 6 ? "text-green" : "text-orange"}`}>
-                    {lastEntry.avg_score}
-                  </div>
-                  <div className="text-[11px] text-dim mt-0.5">上次得分</div>
-                </div>
-              )}
-            </div>
-          </SurfaceCard>
-
-          {primaryRecommendation && (
-            <SurfaceCard className="px-5 py-4 md:px-6 border-green/20">
-              <div className="flex justify-between items-start gap-3 flex-wrap">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <span className="text-[15px] font-semibold">推荐起点</span>
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${recommendationBadge(primaryRecommendation.confidence)}`}>
-                      {primaryRecommendation.confidence === "high" ? "高置信推荐" : primaryRecommendation.confidence === "medium" ? "可尝试" : "探索建议"}
-                    </span>
-                    {primaryRecommendation.topic && <Badge tone="accent">{topics[primaryRecommendation.topic]?.name || primaryRecommendation.topic}</Badge>}
-                  </div>
-                  <div className="text-sm font-medium text-text">{primaryRecommendation.focus_label || primaryRecommendation.title}</div>
-                  {recommendationTrend && (
-                    <div className="mt-1 text-[12px] font-medium text-accent-light">{recommendationActionText} · {recommendationTrend}</div>
-                  )}
-                  <div className="mt-1 text-[12px] text-dim leading-[1.7]">
-                    {primaryRecommendation.why_now || primaryRecommendation.reason || "根据你的近期画像，优先从这个目标开始更划算。"}
-                    {recommendationSecondaryHint ? ` ${recommendationSecondaryHint}` : ""}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {primaryRecommendation.topic && (
-                    <PrimaryButton
-                      onClick={() => launchInterview(
-                        "topic_drill",
-                        primaryRecommendation.topic,
-                        primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "",
-                        primaryRecommendation.focus_label || "",
-                        primaryRecommendation.trend_label || "",
-                      )}
-                      className="py-2 text-[12px] text-black"
-                    >
-                      {recommendationPrimaryButton}
-                    </PrimaryButton>
-                  )}
-                  {primaryRecommendation.topic && (
-                    <SubtleButton
-                      onClick={() => {
-                        setMode("topic_drill");
-                        setSelectedTopic(primaryRecommendation.topic);
-                        setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
-                        setQuickFocusLabel(primaryRecommendation.focus_label || "");
-                        setQuickFocusTrend(primaryRecommendation.trend_label || "");
-                        setPresetNotice("已应用推荐训练目标");
-                        setTimeout(() => scrollToSummary(), 100);
-                      }}
-                      className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light"
-                    >
-                      先按推荐配置
-                    </SubtleButton>
-                  )}
-                  {primaryRecommendation.topic && (
-                    <SubtleButton
-                      onClick={() => navigate("/knowledge", { state: { selectedTopic: primaryRecommendation.topic, searchKeyword: primaryRecommendation.pre_read_keyword || primaryRecommendation.focus_label } })}
-                      className="py-1.5 text-[12px]"
-                    >
-                      先看题库
-                    </SubtleButton>
-                  )}
-                </div>
-              </div>
-            </SurfaceCard>
-          )}
-        </div>
-        </AppSection>
-      )}
-
       {mode === "resume" && (
         <AppSection
-          title="2. 上传简历"
+          title="2. 上传简历并开始"
           subtitle="上传后，系统会基于你的项目经历和技术栈生成更真实的模拟追问。"
           className="w-full max-w-[700px]"
         >
@@ -519,13 +484,39 @@ export default function Home() {
               <input type="file" accept=".pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
           )}
+
+          <SurfaceCard ref={summarySectionRef} className={`mt-4 px-4 py-4 md:px-5 transition-all ${summaryFlash ? "ring-2 ring-accent/30 shadow-[0_0_0_1px_rgba(245,158,11,0.15)]" : ""}`}>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-[14px] font-semibold text-text">本轮启动配置</div>
+                <div className="mt-1 text-[12px] leading-[1.7] text-dim">
+                  {resumeFile ? `将基于简历「${resumeFile.filename}」进行完整模拟面试。` : "请先上传简历，系统会据此生成完整模拟面试。"}
+                </div>
+              </div>
+              <Badge tone={canStart ? "green" : "muted"}>{canStart ? "可以开始" : "等待简历"}</Badge>
+            </div>
+            <div className="mt-4">
+              <PrimaryButton
+                className={`w-full py-3.5 text-base ${!canStart || loading ? "opacity-40 cursor-not-allowed hover:shadow-none" : ""}`}
+                disabled={!canStart || loading}
+                onClick={handleStart}
+                title={!canStart && !loading ? disabledReason : ""}
+              >
+                {loading ? "正在初始化训练..." : "开始简历模拟"}
+                {!loading && <ArrowRight size={16} />}
+              </PrimaryButton>
+              {!canStart && !loading && disabledReason && (
+                <div className="mt-2 text-[12px] text-dim leading-[1.7]">{disabledReason}</div>
+              )}
+            </div>
+          </SurfaceCard>
           </div>
         </AppSection>
       )}
 
       {mode === "topic_drill" && (
         <AppSection
-          title="2. 选择训练专题"
+          title="2. 选择训练专题并开始"
           subtitle="优先展示当前更值得先练的专题；如果你已经知道方向，也可以切换到分类视图。"
           className="w-full max-w-[700px]"
         >
@@ -762,65 +753,45 @@ export default function Home() {
               )}
             </SurfaceCard>
           )}
-          </div>
-        </AppSection>
-      )}
+          {mode === "topic_drill" && (
+            <SurfaceCard ref={summarySectionRef} className={`mb-2 px-4 py-4 md:px-5 transition-all ${summaryFlash ? "ring-2 ring-accent/30 shadow-[0_0_0_1px_rgba(245,158,11,0.15)]" : ""}`}>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <Badge tone="accent">模式：专项强化训练</Badge>
+                    {selectedTopic && <Badge tone="green">专题：{selectedTopicInfo?.name || selectedTopic}</Badge>}
+                    {(quickFocusLabel || quickFocus) && <Badge tone="orange">重点：{quickFocusLabel || quickFocus}</Badge>}
+                    {currentStrategyLabel && <Badge tone="muted">训练意图：{currentStrategyLabel}</Badge>}
+                  </div>
+                  <div className="text-[14px] font-semibold text-text">本轮启动配置</div>
+                  <div className="mt-1 text-[12px] leading-[1.7] text-dim">
+                    {selectedTopic
+                      ? `${quickFocusLabel || quickFocus ? `本轮会先围绕「${quickFocusLabel || quickFocus}」做定向修复，` : ""}随后进入「${selectedTopicInfo?.name || selectedTopic}」专题训练。`
+                      : "请先选择一个训练专题。"}
+                  </div>
+                </div>
+                <Badge tone={canStart ? "green" : "muted"}>{canStart ? "可以开始" : "等待选择专题"}</Badge>
+              </div>
 
-      {mode && (
-        <AppSection
-          title="3. 确认并开始"
-          subtitle="把这一轮的模式、专题和重点确认好，再直接进入训练。"
-          className="w-full max-w-[700px]"
-        >
-          <div ref={summarySectionRef}>
-                    <SurfaceCard className={`mb-4 px-4 py-3 transition-all ${summaryFlash ? "ring-2 ring-accent/30 shadow-[0_0_0_1px_rgba(245,158,11,0.15)]" : ""}`}>
-            <div className="text-[13px] font-semibold text-text mb-2">开始前确认</div>
-            <div className="flex flex-wrap gap-2 mb-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light">
-                模式：{mode === "topic_drill" ? "专项强化训练" : "简历模拟面试"}
-              </span>
-              {selectedTopic && (
-                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green">
-                  专题：{selectedTopicInfo?.name || selectedTopic}
-                </span>
-              )}
-              {(quickFocusLabel || quickFocus) && (
-                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-orange/15 text-orange max-w-full sm:max-w-[260px] break-words sm:truncate" title={quickFocusLabel || quickFocus}>
-                  重点：{quickFocusLabel || quickFocus}
-                </span>
-              )}
-              {currentStrategyLabel && mode === "topic_drill" && (
-                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-hover text-dim">
-                  训练意图：{currentStrategyLabel}
-                </span>
-              )}
-            </div>
-            <div className="text-[12px] text-dim leading-[1.7]">
-              {mode === "resume"
-                ? (resumeFile ? `将基于简历「${resumeFile.filename}」进行完整模拟面试。` : "请先上传简历，系统会据此生成完整模拟面试。")
-                : selectedTopic
-                  ? `${quickFocusLabel || quickFocus ? `本轮会先围绕「${quickFocusLabel || quickFocus}」做定向修复，` : ""}随后进入「${selectedTopicInfo?.name || selectedTopic}」专题训练。`
-                  : "请先选择一个训练专题。"}
-            </div>
-          </SurfaceCard>
-          <div className="mb-2 text-[13px] font-semibold text-dim">确认后开始</div>
-          <SurfaceCard className="px-4 py-4 md:px-5">
-            <PrimaryButton
-              className={`w-full py-3.5 text-base ${!canStart || loading ? "opacity-40 cursor-not-allowed hover:shadow-none" : ""}`}
-              disabled={!canStart || loading}
-              onClick={handleStart}
-              title={!canStart && !loading ? disabledReason : ""}
-            >
-              {loading ? "正在初始化训练..." : mode === "topic_drill" ? "开始本轮训练" : "开始简历模拟"}
-              {!loading && <ArrowRight size={16} />}
-            </PrimaryButton>
-            {!canStart && !loading && disabledReason && (
-              <div className="mt-2 text-[12px] text-dim leading-[1.7]">{disabledReason}</div>
-            )}
-            {canStart && !loading && (
-              <div className="mt-2 text-[12px] text-dim leading-[1.7]">配置已完成，可以直接开始。</div>
-            )}
-          </SurfaceCard>
+              <div className="mt-4">
+                <PrimaryButton
+                  className={`w-full py-3.5 text-base ${!canStart || loading ? "opacity-40 cursor-not-allowed hover:shadow-none" : ""}`}
+                  disabled={!canStart || loading}
+                  onClick={handleStart}
+                  title={!canStart && !loading ? disabledReason : ""}
+                >
+                  {loading ? "正在初始化训练..." : "开始本轮训练"}
+                  {!loading && <ArrowRight size={16} />}
+                </PrimaryButton>
+                {!canStart && !loading && disabledReason && (
+                  <div className="mt-2 text-[12px] text-dim leading-[1.7]">{disabledReason}</div>
+                )}
+                {canStart && !loading && (
+                  <div className="mt-2 text-[12px] text-dim leading-[1.7]">配置已完成，可以直接开始。</div>
+                )}
+              </div>
+            </SurfaceCard>
+          )}
           </div>
         </AppSection>
       )}
