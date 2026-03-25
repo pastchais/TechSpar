@@ -747,8 +747,19 @@ function DrillReview({
       setRefLoading((prev) => ({ ...prev, [questionId]: true }));
       const data = await getReferenceAnswer(sessionId, topic, question, questionId, regenerate);
       setRefAnswers((prev) => ({ ...prev, [questionId]: data }));
+      return data;
     } finally {
       setRefLoading((prev) => ({ ...prev, [questionId]: false }));
+    }
+  };
+
+  const toggleReferenceSection = (questionId, question, nextOpen) => {
+    setOpenedQuestionState((prev) => ({
+      ...prev,
+      [questionId]: { ...(prev[questionId] || {}), reference: nextOpen },
+    }));
+    if (nextOpen && !refAnswers[questionId]?.reference_answer && !refLoading[questionId]) {
+      handleRefAnswer(questionId, question);
     }
   };
 
@@ -992,7 +1003,7 @@ function DrillReview({
                             title="标准参考答案"
                             icon={<BookOpen size={13} />}
                             open={refSectionOpen}
-                            onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), reference: !!e.currentTarget?.open } }))}
+                            onToggle={(e) => toggleReferenceSection(q.id, q.question, !!e.currentTarget?.open)}
                           >
                             <div className="text-sm leading-[1.8]">
                               {refAnswers[q.id]?.reference_answer ? (
@@ -1010,8 +1021,14 @@ function DrillReview({
                                     <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50" onClick={() => handleImprovedAnswer(q.id, q.question)} disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}><BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}</button>
                                   </div>
                                 </>
+                              ) : refLoading[q.id] ? (
+                                <div className="rounded-xl border border-border bg-hover px-3.5 py-3 text-[13px] text-dim">
+                                  正在生成标准参考答案...
+                                </div>
                               ) : (
-                                <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50" onClick={() => handleRefAnswer(q.id, q.question)} disabled={refLoading[q.id]}><BookOpen size={13} />{refLoading[q.id] ? "正在生成参考答案..." : "生成标准参考答案"}</button>
+                                <div className="rounded-xl border border-border bg-hover px-3.5 py-3 text-[13px] leading-[1.7] text-dim">
+                                  首次展开时会自动生成标准参考答案。若稍后仍未出现，可点击“重新生成”。
+                                </div>
                               )}
                             </div>
                           </ExpandableReviewSection>
