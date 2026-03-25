@@ -1,9 +1,9 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import Sidebar from "./components/Sidebar";
 import ErrorBoundary from "./components/ErrorBoundary";
 
+const Sidebar = lazy(() => import("./components/Sidebar"));
 const Landing = lazy(() => import("./pages/Landing"));
 const Login = lazy(() => import("./pages/Login"));
 const Home = lazy(() => import("./pages/Home"));
@@ -47,7 +47,9 @@ function AuthPage() {
 function AppShell({ children }) {
   return (
     <div className="flex flex-col md:flex-row h-screen">
-      <Sidebar />
+      <Suspense fallback={<div className="hidden md:block w-[200px] shrink-0 border-r border-border bg-card" />}>
+        <Sidebar />
+      </Suspense>
       <main className="flex-1 overflow-y-auto flex flex-col">{children}</main>
     </div>
   );
