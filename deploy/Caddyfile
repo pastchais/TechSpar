@@ -1,0 +1,19 @@
+aari.top, www.aari.top, stu.6bits.de {
+    encode gzip zstd
+
+    @api path /api/*
+    reverse_proxy @api techspar-backend:8000
+
+    reverse_proxy techspar-frontend:80
+}
+
+tavily.6bits.de {
+    encode gzip zstd
+
+    @root path /
+    redir @root /index.html 302
+
+    reverse_proxy 172.18.0.1:8080 {
+        header_up Authorization "Bearer hmxfux3vxV099Cnd6dExBeBblk9OaoWkAh0zJOJkSvE"
+    }
+}
