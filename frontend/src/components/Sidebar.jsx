@@ -41,56 +41,63 @@ export default function Sidebar() {
   };
 
   const nav = (
-    <aside className="flex flex-col h-full w-[200px] bg-card border-r border-border">
-      {/* Logo */}
+    <aside className="flex h-full w-[224px] flex-col border-r border-border/80 bg-card/96 backdrop-blur-xl">
       <button
         type="button"
-        className="flex items-center gap-2.5 px-5 py-5 cursor-pointer shrink-0 text-left bg-transparent border-none"
+        className="shrink-0 border-none bg-transparent px-5 py-5 text-left"
         onClick={() => navigate("/")}
         aria-label="返回首页"
       >
-        <img src="/favicon.svg" alt="TechSpar" className="w-7 h-7 rounded-lg object-contain" />
-        <span className="text-base font-display font-bold text-text">TechSpar</span>
+        <div className="flex items-center gap-3">
+          <img src="/favicon.svg" alt="TechSpar" className="h-9 w-9 rounded-xl object-contain" />
+          <div>
+            <div className="text-[16px] font-display font-bold tracking-[-0.02em] text-text">TechSpar</div>
+            <div className="text-[11px] text-dim">Interview Training OS</div>
+          </div>
+        </div>
       </button>
 
-      {/* Nav links */}
-      <nav className="flex-1 flex flex-col gap-0.5 px-3 overflow-y-auto">
-        {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
-          <button
-            key={path}
-            onClick={() => navigate(path)}
-            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] transition-all text-left
-              ${isActive(path)
-                ? "bg-accent/12 text-accent font-medium"
-                : "text-dim hover:text-text hover:bg-hover"
-              }`}
-          >
-            <Icon size={16} className={isActive(path) ? "text-accent" : ""} />
-            {label}
-          </button>
-        ))}
+      <nav className="flex flex-1 flex-col gap-1 px-3 pb-3 overflow-y-auto">
+        {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
+          const active = isActive(path);
+          return (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-[13px] transition-all
+                ${active
+                  ? "border border-accent/20 bg-accent/10 font-medium text-text shadow-[0_12px_28px_-24px_rgba(245,158,11,0.55)]"
+                  : "border border-transparent text-dim hover:border-border hover:bg-hover hover:text-text"
+                }`}
+            >
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-accent/14 text-accent-light" : "bg-hover text-dim"}`}>
+                <Icon size={16} className={active ? "text-accent-light" : ""} />
+              </span>
+              <span className="truncate">{label}</span>
+            </button>
+          );
+        })}
       </nav>
 
-      {/* Bottom section */}
-      <div className="px-3 pb-4 pt-2 border-t border-border mt-auto shrink-0 space-y-1">
-        {/* Theme toggle */}
+      <div className="mt-auto shrink-0 border-t border-border/80 px-3 pb-4 pt-3 space-y-2">
         <button
           onClick={toggleTheme}
-          className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] text-dim
-                     hover:text-text hover:bg-hover transition-all"
+          className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3.5 py-2.5 text-[13px] text-dim transition-all hover:border-border hover:bg-hover hover:text-text"
         >
-          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-hover">
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </span>
           {theme === "dark" ? "浅色模式" : "深色模式"}
         </button>
 
-        {/* User + logout */}
         {user && (
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] text-dim
-                       hover:text-text hover:bg-hover transition-all"
+            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3.5 py-2.5 text-[13px] text-dim transition-all hover:border-border hover:bg-hover hover:text-text"
           >
-            <LogOut size={16} />
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-hover">
+              <LogOut size={16} />
+            </span>
             <span className="truncate">{user.name || user.email}</span>
           </button>
         )}

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronRight, AlertTriangle, X } from "lucide-react";
 import { getProfile, getTopics, resetProfile } from "../api/interview";
 import { topicBadgeLabel, topicDisplayName } from "../utils/topicLabels";
-import { Badge, PageTitle, SectionTitle, SubtleButton } from "../components/ui.jsx";
+import { AppSection, Badge, PageTitle, PrimaryButton, SectionTitle, SubtleButton, SurfaceCard } from "../components/ui.jsx";
 
 function CollapsibleList({ items, limit, renderItem, renderExpandedItem, expandedLabel = "查看完整内容", expandedTitle = "完整展开" }) {
   const [expanded, setExpanded] = useState(false);
@@ -571,13 +571,13 @@ export default function Profile() {
     return (
       <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-3xl mx-auto w-full">
         <PageTitle title="个人画像" className="mb-2" />
-        <div className="text-center py-15 text-dim">
+        <SurfaceCard className="mt-5 px-6 py-8 text-center text-dim">
           <p>还没有面试数据</p>
           <p className="mt-3 text-sm">开始面试后，系统会实时分析你的每个回答，自动构建你的能力画像</p>
-          <button className="mt-5 px-6 py-2.5 rounded-lg bg-accent text-white text-sm" onClick={() => navigate("/")}>
-            开始第一场面试
-          </button>
-        </div>
+          <div className="mt-5 flex justify-center">
+            <PrimaryButton onClick={() => navigate("/")}>开始第一场面试</PrimaryButton>
+          </div>
+        </SurfaceCard>
       </div>
     );
   }
@@ -596,23 +596,46 @@ export default function Profile() {
 
   return (
     <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-5xl mx-auto w-full">
-      <PageTitle
-        title="个人画像"
-        subtitle={`${stats.total_answers || 0} 次回答分析${stats.total_sessions ? ` | ${stats.total_sessions} 次完整面试` : ""} | 上次更新: ${profile.updated_at?.slice(0, 16)}`}
-        className="mb-4"
-      />
-      <div className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-border bg-card px-3 py-3">
-        <SubtleButton onClick={() => scrollToSection(coachRef)} className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light">现在该练什么</SubtleButton>
-        <SubtleButton onClick={() => scrollToSection(insightsRef)} className="py-1.5 text-[12px]">画像重点</SubtleButton>
-        <SubtleButton onClick={() => scrollToSection(trendRef)} className="py-1.5 text-[12px]">成长趋势</SubtleButton>
-        <SubtleButton onClick={() => scrollToSection(masteryRef)} className="py-1.5 text-[12px]">掌握度</SubtleButton>
-        <SubtleButton onClick={() => scrollToSection(analysisRef)} className="py-1.5 text-[12px]">表达与思维</SubtleButton>
-        <SubtleButton onClick={() => scrollToSection(statsRef)} className="py-1.5 text-[12px]">练习统计</SubtleButton>
-      </div>
+      <section className="mb-6 overflow-hidden rounded-[32px] border border-border/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.07),rgba(245,158,11,0.02))] px-5 py-6 md:px-7 md:py-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <PageTitle
+            title="个人画像"
+            subtitle={`${stats.total_answers || 0} 次回答分析${stats.total_sessions ? ` | ${stats.total_sessions} 次完整面试` : ""} | 上次更新: ${profile.updated_at?.slice(0, 16)}`}
+            className="mb-0"
+          />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[420px]">
+            <SurfaceCard className="px-4 py-4 bg-card/85">
+              <div className="text-[12px] text-dim">总练习</div>
+              <div className="mt-2 text-[24px] font-bold text-accent-light">{stats.total_sessions || 0}</div>
+            </SurfaceCard>
+            <SurfaceCard className="px-4 py-4 bg-card/85">
+              <div className="text-[12px] text-dim">综合平均</div>
+              <div className="mt-2 text-[24px] font-bold text-green">{stats.avg_score || "-"}</div>
+            </SurfaceCard>
+            <SurfaceCard className="px-4 py-4 bg-card/85">
+              <div className="text-[12px] text-dim">待修弱点</div>
+              <div className="mt-2 text-[24px] font-bold text-text">{weakActiveAll.length}</div>
+            </SurfaceCard>
+            <SurfaceCard className="px-4 py-4 bg-card/85">
+              <div className="text-[12px] text-dim">已改善</div>
+              <div className="mt-2 text-[24px] font-bold text-text">{weakImproved.length}</div>
+            </SurfaceCard>
+          </div>
+        </div>
+      </section>
 
-      {/* Stats */}
-      <div className="mb-7" ref={statsRef}>
-        <SectionTitle>练习统计</SectionTitle>
+      <SurfaceCard className="mb-8 px-3 py-3">
+        <div className="flex flex-wrap gap-2">
+          <SubtleButton onClick={() => scrollToSection(coachRef)} className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light">现在该练什么</SubtleButton>
+          <SubtleButton onClick={() => scrollToSection(insightsRef)} className="py-1.5 text-[12px]">画像重点</SubtleButton>
+          <SubtleButton onClick={() => scrollToSection(trendRef)} className="py-1.5 text-[12px]">成长趋势</SubtleButton>
+          <SubtleButton onClick={() => scrollToSection(masteryRef)} className="py-1.5 text-[12px]">掌握度</SubtleButton>
+          <SubtleButton onClick={() => scrollToSection(analysisRef)} className="py-1.5 text-[12px]">表达与思维</SubtleButton>
+          <SubtleButton onClick={() => scrollToSection(statsRef)} className="py-1.5 text-[12px]">练习统计</SubtleButton>
+        </div>
+      </SurfaceCard>
+
+      <AppSection title="练习统计" subtitle="先看训练量、平均分和不同模式表现，再决定后面该从哪个模块深入。" className="mb-7" ref={statsRef}>
         {/* Overview row */}
         <div className="flex gap-3 mb-3">
           <div className="flex-1 bg-hover rounded-lg p-4 text-center">
@@ -653,22 +676,20 @@ export default function Profile() {
             </div>
           </div>
         </div>
-      </div>
+      </AppSection>
 
       {/* Score Trend */}
       {(stats.score_history || []).length >= 2 && (
-        <div className="mb-7" ref={trendRef}>
-          <SectionTitle>成长趋势</SectionTitle>
-          <div className="bg-card border border-border rounded-box px-4 py-5 md:px-6">
+        <AppSection title="成长趋势" subtitle="观察整体分数是否真的在上升，而不是只在某次表现得更好。" className="mb-7" ref={trendRef}>
+          <SurfaceCard className="px-4 py-5 md:px-6">
             <ScoreChart history={stats.score_history} topics={topics} />
-          </div>
-        </div>
+          </SurfaceCard>
+        </AppSection>
       )}
 
       {/* Drill targeting stats */}
       {(stats.drill_targeting || []).length > 0 && (
-        <div className="mb-7">
-          <SectionTitle>针对性训练效果</SectionTitle>
+        <AppSection title="针对性训练效果" subtitle="看 focus 是否真的命中、薄弱点是否真正回升，而不是只完成了一轮练习。" className="mb-7">
           <div className="flex flex-col gap-2.5">
             {(stats.drill_targeting || []).slice(-5).reverse().map((item, idx) => (
               <div key={idx} className="px-4 py-3 rounded-lg bg-hover text-sm">
@@ -694,13 +715,12 @@ export default function Profile() {
               </div>
             ))}
           </div>
-        </div>
+        </AppSection>
       )}
 
       {/* Topic Mastery */}
       {Object.keys(profile.topic_mastery || {}).length > 0 && (
-        <div className="mb-7" ref={masteryRef}>
-          <div className="text-base font-semibold mb-3 flex items-center gap-2">领域掌握度</div>
+        <AppSection title="领域掌握度" subtitle="按专题查看你已经稳定掌握到什么程度，以及哪里还只是看起来会。" className="mb-7" ref={masteryRef}>
           <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
             {Object.entries(profile.topic_mastery).map(([topic, data]) => (
               <div
@@ -722,7 +742,7 @@ export default function Profile() {
               </div>
             ))}
           </div>
-        </div>
+        </AppSection>
       )}
 
       <div ref={coachRef}>

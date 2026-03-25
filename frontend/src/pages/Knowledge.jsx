@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, Sparkles, ChevronRight, ChevronDown } from "lucide-react";
 import { getTopicIcon, ICON_OPTIONS } from "../utils/topicIcons";
-import { SectionTitle, SubtleButton } from "../components/ui.jsx";
+import { AppSection, PageTitle, PrimaryButton, SectionTitle, SubtleButton, SurfaceCard, TextInput } from "../components/ui.jsx";
 import {
   getTopics,
   getCoreKnowledge,
@@ -14,6 +14,9 @@ import {
   createTopic,
   deleteTopic,
   generateKnowledge,
+  generateKnowledgeDraft,
+  refineKnowledgeContent,
+  splitKnowledgeContent,
   getKnowledgeQueryHints,
 } from "../api/interview";
 
@@ -123,6 +126,13 @@ export default function Knowledge() {
 
   const [newFileName, setNewFileName] = useState("");
   const [showNewFile, setShowNewFile] = useState(false);
+  const [showQuickImport, setShowQuickImport] = useState(false);
+  const [quickImportTitle, setQuickImportTitle] = useState("");
+  const [quickImportContent, setQuickImportContent] = useState("");
+  const [quickImportPrompt, setQuickImportPrompt] = useState("");
+  const [splitResults, setSplitResults] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [aiWorking, setAiWorking] = useState(false);
 
   const [generating, setGenerating] = useState(false);
 
@@ -253,6 +263,120 @@ export default function Knowledge() {
       setCoreFiles((prev) => prev.filter((f) => f.filename !== filename));
       if (expandedFile === filename) setExpandedFile(null);
     } catch (e) { alert("删除失败: " + e.message); }
+  };
+
+  const handleQuickImport = async () => {
+    const title = quickImportTitle.trim();
+    const content = quickImportContent.trim();
+    if (!selected) return;
+    if (!title || !content) {
+      alert("请先填写标题和内容");
+      return;
+    }
+    const filename = (title.endsWith('.md') ? title : `${title}.md`).replace(/[\\/:*?"<>|]+/g, '-');
+    setImporting(true);
+    try {
+      await createCoreKnowledge(selected, filename, content);
+      await loadCore(selected);
+      setExpandedFile(filename);
+      setQuickImportTitle("");
+      setQuickImportContent("");
+      setShowQuickImport(false);
+    } catch (e) {
+      alert("导入失败: " + e.message);
+    }
+    setImporting(false);
+  };
+
+  const handleFileImport = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!selected || !files.length) return;
+    setImporting(true);
+    try {
+      for (const file of files) {
+        const raw = await file.text();
+        const baseName = String(file.name || '导入文件.md').replace(/\.(txt|md)$/i, '');
+        const filename = `${baseName.replace(/[\\/:*?"<>|]+/g, '-')}.md`;
+        await createCoreKnowledge(selected, filename, raw);
+      }
+      await loadCore(selected);
+      if (files[0]?.name) {
+        setExpandedFile(String(files[0].name).replace(/\.(txt|md)$/i, '').replace(/[\\/:*?"<>|]+/g, '-') + '.md');
+      }
+      event.target.value = "";
+    } catch (e) {
+      alert("文件导入失败: " + e.message);
+    }
+    setImporting(false);
+  };
+
+  const handleAIGenerateDraft = async () => {
+    const title = quickImportTitle.trim();
+    if (!selected || !title) {
+      alert("请先填写标题");
+      return;
+    }
+    setAiWorking(true);
+    try {
+      const res = await generateKnowledgeDraft(selected, title, quickImportPrompt.trim());
+      setQuickImportContent(res.content || "");
+    } catch (e) {
+      alert("AI 生成失败: " + e.message);
+    }
+    setAiWorking(false);
+  };
+
+  const handleAIRefine = async () => {
+    const content = quickImportContent.trim();
+    if (!selected || !content) {
+      alert("请先粘贴原始内容");
+      return;
+    }
+    setAiWorking(true);
+    try {
+      const res = await refineKnowledgeContent(selected, quickImportTitle.trim(), content);
+      setQuickImportContent(res.content || "");
+      setSplitResults([]);
+    } catch (e) {
+      alert("AI 整理失败: " + e.message);
+    }
+    setAiWorking(false);
+  };
+
+  const handleAISplit = async () => {
+    const content = quickImportContent.trim();
+    if (!selected || !content) {
+      alert("请先粘贴要拆分的长文内容");
+      return;
+    }
+    setAiWorking(true);
+    try {
+      const res = await splitKnowledgeContent(selected, content, 4);
+      setSplitResults(res.files || []);
+    } catch (e) {
+      alert("AI 拆分失败: " + e.message);
+    }
+    setAiWorking(false);
+  };
+
+  const handleImportSplitResults = async () => {
+    if (!selected || !splitResults.length) return;
+    setImporting(true);
+    try {
+      for (const item of splitResults) {
+        await createCoreKnowledge(selected, item.filename, item.content || "");
+      }
+      await loadCore(selected);
+      setExpandedFile(splitResults[0]?.filename || null);
+      setSplitResults([]);
+      setShowQuickImport(false);
+      setQuickImportTitle("");
+      setQuickImportPrompt("");
+      setQuickImportContent("");
+    } catch (e) {
+      alert("批量导入失败: " + e.message);
+    }
+    setImporting(false);
   };
 
   const handleGenerate = async () => {
@@ -424,6 +548,17 @@ export default function Knowledge() {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        <section className="border-b border-border/80 bg-card/95 px-4 py-4 md:px-6 backdrop-blur-xl">
+          <div className="flex items-start md:items-center justify-between gap-4 flex-wrap mb-3">
+            <PageTitle
+              className="mb-0"
+              title="Knowledge"
+              subtitle={selected ? `当前领域：${topics[selected]?.name || selected} · 管理 AI 出题与评分依赖的核心知识材料。` : "选择一个训练领域后开始整理知识内容。"}
+            />
+            {selected && <PrimaryButton onClick={handleGoTrain}>开始本轮训练</PrimaryButton>}
+          </div>
+        </section>
+
         {/* Tabs */}
         <div className="flex border-b border-border px-4 md:px-6 bg-card items-start md:items-center justify-between gap-3 flex-wrap">
           <div className="flex flex-wrap">
@@ -437,8 +572,8 @@ export default function Knowledge() {
             >高频题库</button>
           </div>
           <div className="px-0 md:px-0 pb-3 md:pb-0 w-full md:w-[280px]">
-            <input
-              className="w-full px-3 py-2 rounded-lg border border-border bg-bg text-text text-[13px]"
+            <TextInput
+              className="text-[13px]"
               placeholder="按 weak point / 关键词定位内容"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -461,12 +596,14 @@ export default function Knowledge() {
             <div className="text-center py-15 text-dim text-sm">选择一个领域</div>
           ) : tab === "core" ? (
             <div>
-              <div className="text-[13px] text-dim mb-3">
-                AI 出题和评分的参考依据，编辑后影响该领域的题目质量。支持 Markdown 格式。
-              </div>
+              <SurfaceCard className="mb-4 px-4 py-3 bg-card/70">
+                <div className="text-[13px] text-dim">
+                  AI 出题和评分的参考依据，编辑后会直接影响该领域的题目质量与追问深度。支持 Markdown 格式。
+                </div>
+              </SurfaceCard>
 
               {readingPlan.length > 0 && (
-                <div className="mb-4 rounded-box border border-accent/30 bg-accent/5 px-4 py-4 md:px-5">
+                <SurfaceCard className="mb-4 px-4 py-4 md:px-5 border-accent/30 bg-accent/5">
                   <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                     <div>
                       <SectionTitle className="mb-1 text-sm">推荐阅读顺序</SectionTitle>
@@ -478,35 +615,35 @@ export default function Knowledge() {
                             : "根据当前关键词相关性，建议优先阅读下面几份材料"}
                       </div>
                     </div>
-                    <button
+                    <PrimaryButton
                       onClick={handleGoTrain}
-                      className="px-3 py-2 rounded-lg bg-accent text-white text-[12px] font-medium cursor-pointer hover:opacity-90"
+                      className="px-3 py-2 text-[12px]"
                     >
                       开始本轮训练
-                    </button>
+                    </PrimaryButton>
                   </div>
                   <div className="grid gap-2 md:grid-cols-3">
                     {readingPlan.map((f, idx) => {
                       const labels = ["先看", "再看", "补充看"];
                       return (
-                        <button
+                        <SurfaceCard
                           key={f.filename}
                           onClick={() => setExpandedFile(f.filename)}
-                          className="text-left rounded-lg border border-border bg-card px-3 py-3 cursor-pointer hover:border-accent transition-all"
+                          className="cursor-pointer px-3 py-3 text-left transition-all hover:border-accent"
                         >
                           <div className="text-[11px] font-medium text-accent-light mb-1">{labels[idx] || `第 ${idx + 1} 份`}</div>
                           <div className="text-[13px] font-medium text-text break-all">{f.filename}</div>
                           {f.__rank?.reason && (
                             <div className="mt-1 text-[12px] text-dim">{f.__rank.reason}</div>
                           )}
-                        </button>
+                        </SurfaceCard>
                       );
                     })}
                   </div>
-                </div>
+                </SurfaceCard>
               )}
 
-              <div className="flex gap-2 mb-4">
+              <div className="flex gap-2 mb-4 flex-wrap">
                 {showNewFile ? (
                   <>
                     <input className="flex-1 px-3 py-2 rounded-lg border border-border bg-bg text-text text-[13px]" placeholder="文件名 (例: 装饰器.md)" value={newFileName} onChange={(e) => setNewFileName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleCreateFile()} />
@@ -516,6 +653,11 @@ export default function Knowledge() {
                 ) : (
                   <>
                     <SubtleButton onClick={() => setShowNewFile(true)} className="px-5 py-2">+ 新增文件</SubtleButton>
+                    <SubtleButton onClick={() => setShowQuickImport((v) => !v)} className="px-5 py-2">+ 快速导入</SubtleButton>
+                    <label className="inline-flex items-center gap-2 rounded-xl bg-hover px-4 py-2 text-[13px] font-medium text-dim transition-all hover:text-accent-light cursor-pointer">
+                      + 上传 md/txt
+                      <input type="file" accept=".md,.txt,text/markdown,text/plain" multiple className="hidden" onChange={handleFileImport} />
+                    </label>
                     {coreIsEmpty && (
                       <button
                         className="px-5 py-2 rounded-lg bg-accent/15 border border-accent/40 text-accent-light text-[13px] cursor-pointer disabled:opacity-50"
@@ -528,6 +670,74 @@ export default function Knowledge() {
                   </>
                 )}
               </div>
+
+              {showQuickImport && (
+                <div className="mb-4 rounded-box border border-border bg-card px-4 py-4 md:px-5">
+                  <div className="text-[14px] font-semibold text-text mb-2">快速导入知识内容</div>
+                  <div className="text-[12px] text-dim mb-3">适合把现成笔记、博客摘录、面试总结直接贴进知识库，也可以先让 AI 帮你生成或整理成结构化初稿。</div>
+                  <div className="flex flex-col gap-3">
+                    <input
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-bg text-text text-[13px]"
+                      placeholder="标题 / 文件名，例如：Redis 持久化机制"
+                      value={quickImportTitle}
+                      onChange={(e) => setQuickImportTitle(e.target.value)}
+                    />
+                    <input
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-bg text-text text-[13px]"
+                      placeholder="可选：补充要求，例如“更偏面试追问”“强调工程实践”“写得简洁一点”"
+                      value={quickImportPrompt}
+                      onChange={(e) => setQuickImportPrompt(e.target.value)}
+                    />
+                    <div className="flex gap-2 flex-wrap">
+                      <button className="px-4 py-2 rounded-lg border border-accent/40 bg-accent/10 text-accent-light text-[13px] cursor-pointer disabled:opacity-50" onClick={handleAIGenerateDraft} disabled={aiWorking || !quickImportTitle.trim()}>
+                        {aiWorking ? "AI 处理中..." : "AI 生成初稿"}
+                      </button>
+                      <button className="px-4 py-2 rounded-lg border border-border bg-hover text-text text-[13px] cursor-pointer disabled:opacity-50" onClick={handleAIRefine} disabled={aiWorking || !quickImportContent.trim()}>
+                        {aiWorking ? "AI 处理中..." : "AI 整理内容"}
+                      </button>
+                      <button className="px-4 py-2 rounded-lg border border-border bg-hover text-text text-[13px] cursor-pointer disabled:opacity-50" onClick={handleAISplit} disabled={aiWorking || !quickImportContent.trim()}>
+                        {aiWorking ? "AI 处理中..." : "AI 拆分长文"}
+                      </button>
+                    </div>
+                    <textarea
+                      className="w-full min-h-[220px] p-3 rounded-lg border border-border bg-bg text-text text-[13px] font-mono leading-relaxed resize-y"
+                      placeholder="# Redis 持久化机制\n\n- RDB 和 AOF 的区别..."
+                      value={quickImportContent}
+                      onChange={(e) => { setQuickImportContent(e.target.value); setSplitResults([]); }}
+                    />
+                    {splitResults.length > 0 && (
+                      <div className="rounded-box border border-border bg-bg px-4 py-4">
+                        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                          <div>
+                            <div className="text-[14px] font-semibold text-text">AI 拆分结果</div>
+                            <div className="text-[12px] text-dim">已拆成 {splitResults.length} 份知识文档，你可以一键全部导入。</div>
+                          </div>
+                          <button className="px-4 py-2 rounded-lg bg-accent text-white text-[13px] cursor-pointer disabled:opacity-50" onClick={handleImportSplitResults} disabled={importing}>
+                            {importing ? "导入中..." : "一键全部导入"}
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {splitResults.map((item, idx) => (
+                            <div key={`${item.filename}-${idx}`} className="rounded-lg border border-border bg-card px-3 py-3">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/10 text-accent-light">{item.filename}</span>
+                                {item.reason && <span className="text-[12px] text-dim">{item.reason}</span>}
+                              </div>
+                              <div className="text-[12px] text-dim leading-[1.7] line-clamp-3 whitespace-pre-wrap">{String(item.content || "").slice(0, 240)}{String(item.content || "").length > 240 ? "..." : ""}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-2 justify-end flex-wrap">
+                      <button className="px-5 py-2 rounded-lg border border-border bg-hover text-text text-[13px] cursor-pointer" onClick={() => { setShowQuickImport(false); setQuickImportTitle(""); setQuickImportPrompt(""); setQuickImportContent(""); }}>取消</button>
+                      <button className="px-5 py-2 rounded-lg bg-accent text-white text-[13px] cursor-pointer disabled:opacity-50" onClick={handleQuickImport} disabled={importing || !quickImportTitle.trim() || !quickImportContent.trim()}>
+                        {importing ? "导入中..." : "导入到知识库"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {coreFiles.length === 0 ? (
                 <div className="text-center py-15 text-dim text-sm">该领域暂无知识文件</div>

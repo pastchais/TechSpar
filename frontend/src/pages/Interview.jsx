@@ -6,6 +6,7 @@ import ChatBubble from "../components/ChatBubble";
 import { sendMessage, endInterview } from "../api/interview";
 import useVoiceInput from "../hooks/useVoiceInput";
 import { formatTopicKey } from "../utils/topicLabels";
+import { Badge, PrimaryButton, SurfaceCard, TextInput } from "../components/ui.jsx";
 
 export default function Interview() {
   const { sessionId } = useParams();
@@ -153,20 +154,20 @@ export default function Interview() {
     return (
       <div className="flex-1 flex flex-col h-full">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-3 md:px-6 border-b border-border bg-card">
+        <div className="flex items-center justify-between px-4 py-3 md:px-6 border-b border-border bg-card/95 backdrop-blur-xl">
           <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-            <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${modeBadge.cls}`}>{modeBadge.text}</span>
+            <Badge tone={isDrill ? "green" : "accent"}>{modeBadge.text}</Badge>
             {initData.topic && <span className="text-sm text-dim">{formatTopicKey(initData.topic)}</span>}
-            {initData.quickFocusLabel && <span className="text-[12px] px-2 py-1 rounded-md bg-green/10 text-green">修复目标: {initData.quickFocusLabel}</span>}
+            {initData.quickFocusLabel && <Badge tone="green">修复目标: {initData.quickFocusLabel}</Badge>}
             <div className="text-[13px] text-dim">{answeredCount}/{totalQ} 已答</div>
           </div>
-          <button
-            className={`px-4 py-2 md:px-5 rounded-lg bg-red/15 text-red text-sm font-medium transition-all ${submitting ? "opacity-40" : ""}`}
+          <PrimaryButton
+            className={`px-4 py-2 md:px-5 text-sm ${submitting ? "opacity-40" : ""}`}
             onClick={handleEndDrill}
             disabled={submitting}
           >
             {submitting ? "评估中..." : finished ? "查看评估" : "结束训练"}
-          </button>
+          </PrimaryButton>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-6 md:px-6 md:py-8 flex flex-col items-center gap-5">
@@ -222,7 +223,7 @@ export default function Interview() {
               </div>
 
               {/* Question card */}
-              <div className="w-full max-w-[720px] bg-card border border-border rounded-2xl px-5 py-6 md:px-8 md:py-7 animate-fade-in">
+              <SurfaceCard className="w-full max-w-[720px] px-5 py-6 md:px-8 md:py-7 animate-fade-in">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-3 py-1 rounded-md">Q{currentQ.id}</span>
                   <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -267,7 +268,7 @@ export default function Interview() {
                     <ReactMarkdown>{currentQ.question}</ReactMarkdown>
                   </div>
                 </div>
-              </div>
+              </SurfaceCard>
 
               {/* Input area */}
               <div className="w-full max-w-[720px] flex flex-col md:flex-row gap-3 py-2">
@@ -299,13 +300,13 @@ export default function Interview() {
                   )}
                 </div>
                 <div className="flex md:flex-col gap-2 self-end md:self-end">
-                  <button
-                    className={`px-7 py-3.5 rounded-box bg-accent text-white font-semibold text-[15px] transition-opacity ${!drillInput.trim() ? "opacity-40" : ""}`}
+                  <PrimaryButton
+                    className={`px-7 py-3.5 text-[15px] ${!drillInput.trim() ? "opacity-40 hover:shadow-none" : ""}`}
                     onClick={handleDrillSubmit}
                     disabled={!drillInput.trim()}
                   >
                     {currentIndex < totalQ - 1 ? "下一题" : "完成"}
-                  </button>
+                  </PrimaryButton>
                   <button className="px-4 py-2 rounded-box bg-transparent text-dim text-[13px] border border-border transition-all hover:bg-hover" onClick={handleSkip}>
                     跳过
                   </button>
@@ -329,9 +330,9 @@ export default function Interview() {
   // ── Chat mode (resume interview) ──
   return (
     <div className="flex-1 flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-3 md:px-6 border-b border-border bg-card">
+      <div className="flex items-center justify-between px-4 py-3 md:px-6 border-b border-border bg-card/95 backdrop-blur-xl">
         <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-          <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${modeBadge.cls}`}>{modeBadge.text}</span>
+          <Badge tone="accent">{modeBadge.text}</Badge>
           {initData.topic && <span className="text-sm text-dim">{formatTopicKey(initData.topic)}</span>}
           {progress && (
             <div className="text-[13px] text-dim flex items-center gap-1.5">
@@ -340,13 +341,13 @@ export default function Interview() {
             </div>
           )}
         </div>
-        <button
-          className="px-4 py-2 md:px-5 rounded-lg bg-red/15 text-red text-sm font-medium transition-all"
+        <PrimaryButton
+          className="px-4 py-2 md:px-5 text-sm"
           onClick={handleEndResume}
           disabled={reviewing}
         >
           {reviewing ? "生成复盘中..." : finished ? "查看复盘" : "结束面试"}
-        </button>
+        </PrimaryButton>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-6 md:px-6 md:py-8 flex flex-col gap-7 max-w-3xl w-full mx-auto">
@@ -365,10 +366,10 @@ export default function Interview() {
       </div>
 
       <div className="px-4 pt-4 pb-5 md:px-6 md:pb-6 flex justify-center">
-        <div className="relative w-full max-w-3xl">
+        <SurfaceCard className="relative w-full max-w-3xl overflow-hidden">
           <textarea
             ref={textareaRef}
-            className="w-full px-4 py-4 md:px-5 pr-14 rounded-2xl border border-border bg-card text-text resize-none outline-none min-h-[80px] max-h-[240px] leading-normal text-[15px]"
+            className="w-full px-4 py-4 md:px-5 pr-14 border-0 bg-transparent text-text resize-none outline-none min-h-[80px] max-h-[240px] leading-normal text-[15px]"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -392,7 +393,7 @@ export default function Interview() {
               </svg>
             </button>
           )}
-        </div>
+        </SurfaceCard>
       </div>
     </div>
   );

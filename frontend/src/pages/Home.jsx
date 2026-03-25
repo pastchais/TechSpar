@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FileText, ChevronRight, Mic } from "lucide-react";
+import { FileText, ChevronRight, Mic, Sparkles, ArrowRight } from "lucide-react";
 import TopicCard from "../components/TopicCard";
 import { getTopics, startInterview, getResumeStatus, uploadResume, getProfile } from "../api/interview";
-import { Badge, SubtleButton, SectionTitle, OutlineButton } from "../components/ui.jsx";
+import { AppSection, Badge, OutlineButton, PageTitle, PrimaryButton, SectionTitle, SubtleButton, SurfaceCard } from "../components/ui.jsx";
 
 function recommendationBadge(confidence) {
   if (confidence === "high") return "bg-green/10 text-green";
@@ -243,25 +243,44 @@ export default function Home() {
       : (!selectedTopic ? "请先选择一个训练专题。" : "");
 
   return (
-    <div className="flex-1 flex flex-col items-center px-4 pt-8 pb-10 md:px-6 md:pt-15">
-      {/* Hero */}
-      <div className="text-center mb-8 md:mb-12 relative animate-fade-in px-2">
-        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[300px] h-[180px] md:w-[500px] md:h-[250px] bg-gradient-to-b from-accent/10 via-accent/5 to-transparent rounded-full blur-3xl pointer-events-none" />
-        <h1 className="text-[28px] leading-tight md:text-[44px] font-display font-bold mb-2.5 bg-gradient-to-r from-accent-light via-accent to-orange bg-clip-text text-transparent relative">
-          TechSpar
-        </h1>
-        <p className="text-[14px] leading-6 md:text-base text-dim max-w-[500px] relative mx-auto">
-          AI 面试训练系统——追踪成长轨迹，定位薄弱点
-        </p>
-      </div>
+    <div className="flex-1 px-4 pb-10 pt-6 md:px-6 md:pb-12 md:pt-8">
+      <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-8">
+        <section className="relative overflow-hidden rounded-[32px] border border-border/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.08),rgba(245,158,11,0.02))] px-5 py-6 md:px-8 md:py-8 animate-fade-in">
+          <div className="pointer-events-none absolute right-[-60px] top-[-80px] h-[220px] w-[220px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.18),transparent_62%)] blur-3xl" />
+          <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <Badge tone="accent" className="mb-4 gap-1.5 px-3 py-1.5 text-[12px]">
+                <Sparkles size={14} />
+                Start from the right weakness, not from zero
+              </Badge>
+              <PageTitle
+                title="从最值得修的点开始这一轮训练。"
+                subtitle="先决定练什么，再决定怎么练。TechSpar 会根据你的画像、趋势和当前选择，把本轮训练收束成一个更明确的开始路径。"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[360px]">
+              <SurfaceCard className="px-4 py-4 bg-card/85">
+                <div className="text-[12px] text-dim">训练模式</div>
+                <div className="mt-2 text-[16px] font-semibold text-text">{mode ? modeMeta[mode]?.label : "待选择"}</div>
+              </SurfaceCard>
+              <SurfaceCard className="px-4 py-4 bg-card/85">
+                <div className="text-[12px] text-dim">推荐起点</div>
+                <div className="mt-2 text-[16px] font-semibold text-text">{primaryRecommendation?.focus_label || "待生成"}</div>
+              </SurfaceCard>
+              <SurfaceCard className="px-4 py-4 bg-card/85">
+                <div className="text-[12px] text-dim">当前可开始</div>
+                <div className={`mt-2 text-[16px] font-semibold ${canStart ? "text-green" : "text-dim"}`}>{canStart ? "已就绪" : "未完成配置"}</div>
+              </SurfaceCard>
+            </div>
+          </div>
+        </section>
 
-      {/* Mode switch - Refined Interactivity */}
-      <div className="w-full max-w-[700px] mb-8 animate-slide-up" ref={modeSectionRef}>
-        <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-4 md:px-5">
-          <div className="text-[18px] font-semibold text-text">选择本轮训练模式</div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <AppSection
+          title="1. 选择本轮训练模式"
+          subtitle="先决定本轮是从简历出发，还是从单个专题集中突破。"
+          className="animate-slide-up"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" ref={modeSectionRef}>
           {Object.entries(modeMeta).map(([key, meta]) => {
             const isSelected = mode === key;
             const themeColor = meta.color === "accent" ? "var(--accent)" : "var(--green)";
@@ -338,10 +357,12 @@ export default function Home() {
         </div>
 
         {mode && (
-          <div className="mt-3 rounded-xl border border-accent/15 bg-accent/5 px-4 py-3 text-[12px] text-dim leading-[1.7]">
-            已选择：<span className="font-medium text-text">{mode === "resume" ? "简历模拟面试" : "专题强化训练"}</span>。
-            {mode === "resume" ? " 下一步上传简历。" : " 下一步选择训练专题。"}
-          </div>
+          <SurfaceCard className="mt-3 px-4 py-3 bg-accent/5 border-accent/15">
+            <div className="text-[12px] text-dim leading-[1.7]">
+              已选择：<span className="font-medium text-text">{mode === "resume" ? "简历模拟面试" : "专题强化训练"}</span>。
+              {mode === "resume" ? " 下一步上传简历。" : " 下一步选择训练专题。"}
+            </div>
+          </SurfaceCard>
         )}
 
         <div className="mt-4 flex justify-center">
@@ -350,12 +371,16 @@ export default function Home() {
           </SubtleButton>
         </div>
 
-      </div>
+        </AppSection>
 
-      {/* Quick stats + recommendation */}
       {profile?.stats?.total_sessions > 0 && (
-        <div className="w-full max-w-[700px] mb-8 flex flex-col gap-3">
-          <div className={`${panelTone("summary")} rounded-xl px-5 py-5 md:px-6 transition-all ${mode ? "opacity-95" : ""}`}>
+        <AppSection
+          title="2. 先看当前状态与推荐起点"
+          subtitle="别从全部信息里自己找入口。先看最近状态，再决定这一轮最值得从哪一点切入。"
+          className="w-full max-w-[700px]"
+        >
+          <div className="flex flex-col gap-3">
+            <SurfaceCard className={`px-5 py-5 md:px-6 transition-all ${mode ? "opacity-95" : ""}`}>
             <div className="flex justify-between items-center mb-3.5 gap-3 flex-wrap">
               <span className="text-[15px] font-semibold">先看当前状态</span>
               <span
@@ -397,10 +422,10 @@ export default function Home() {
                 </div>
               )}
             </div>
-          </div>
+          </SurfaceCard>
 
           {primaryRecommendation && (
-            <div className={`${panelTone("recommend")} rounded-xl px-5 py-4 md:px-6`}>
+            <SurfaceCard className="px-5 py-4 md:px-6 border-green/20">
               <div className="flex justify-between items-start gap-3 flex-wrap">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -421,7 +446,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   {primaryRecommendation.topic && (
-                    <SubtleButton
+                    <PrimaryButton
                       onClick={() => launchInterview(
                         "topic_drill",
                         primaryRecommendation.topic,
@@ -429,10 +454,10 @@ export default function Home() {
                         primaryRecommendation.focus_label || "",
                         primaryRecommendation.trend_label || "",
                       )}
-                      className="bg-green/10 py-1.5 text-[12px] text-green hover:text-green"
+                      className="py-2 text-[12px] text-black"
                     >
                       {recommendationPrimaryButton}
-                    </SubtleButton>
+                    </PrimaryButton>
                   )}
                   {primaryRecommendation.topic && (
                     <SubtleButton
@@ -460,18 +485,21 @@ export default function Home() {
                   )}
                 </div>
               </div>
-            </div>
+            </SurfaceCard>
           )}
         </div>
+        </AppSection>
       )}
 
-      {/* Resume upload */}
       {mode === "resume" && (
-        <div className="w-full max-w-[700px] mb-8" ref={resumeSectionRef}>
-                    <div className="mb-2 text-[15px] font-semibold text-text">上传简历以生成模拟面试</div>
-          <div className="mb-3 text-[12px] text-dim leading-[1.7]">上传后，系统会基于你的项目和技术栈生成追问路径。</div>
+        <AppSection
+          title="2. 上传简历"
+          subtitle="上传后，系统会基于你的项目经历和技术栈生成更真实的模拟追问。"
+          className="w-full max-w-[700px]"
+        >
+          <div ref={resumeSectionRef}>
           {resumeFile ? (
-            <div className="flex items-center justify-between px-4 py-4 md:px-5 bg-card border border-border rounded-xl">
+            <SurfaceCard className="flex items-center justify-between px-4 py-4 md:px-5">
               <div className="flex items-center gap-2.5 text-sm text-text">
                 <FileText size={18} className="text-dim shrink-0" />
                 <span className="font-medium">{resumeFile.filename}</span>
@@ -479,43 +507,48 @@ export default function Home() {
                   ({(resumeFile.size / 1024).toFixed(0)} KB)
                 </span>
               </div>
-              <label className={`px-4 py-2 rounded-lg bg-accent/12 text-accent-light text-[13px] font-medium cursor-pointer transition-opacity ${uploading ? "opacity-40" : ""}`}>
+              <label className={`px-4 py-2 rounded-xl bg-accent/12 text-accent-light text-[13px] font-medium cursor-pointer transition-opacity ${uploading ? "opacity-40" : ""}`}>
                 {uploading ? "上传中..." : "重新上传"}
                 <input type="file" accept=".pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
               </label>
-            </div>
+            </SurfaceCard>
           ) : (
-            <label className={`flex flex-col items-center gap-2 px-5 py-7 bg-card border-2 border-dashed border-border rounded-xl cursor-pointer transition-colors text-sm text-dim hover:border-accent/50 ${uploading ? "opacity-50" : ""}`}>
+            <label className={`flex flex-col items-center gap-2 rounded-[24px] border-2 border-dashed border-border bg-card px-5 py-8 text-sm text-dim cursor-pointer transition-colors hover:border-accent/50 ${uploading ? "opacity-50" : ""}`}>
               <FileText size={28} className="text-dim" />
               <span>{uploading ? "正在上传..." : "点击上传简历（PDF）"}</span>
               <input type="file" accept=".pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
           )}
-        </div>
+          </div>
+        </AppSection>
       )}
 
-      {/* Topic selection */}
       {mode === "topic_drill" && (
-        <div className="w-full max-w-[700px]" ref={topicSectionRef}>
-                    {presetNotice && (
-            <div className={`${panelTone("preset")} mb-4 rounded-xl px-4 py-3`}>
-              <div className="text-[13px] font-semibold text-text mb-1">已应用推荐训练目标</div>
-              <div className="text-[12px] text-dim">
-                {presetNotice}
-                {selectedTopic ? `：当前已选「${selectedTopicInfo?.name || selectedTopic}」` : "。"}
-                {quickFocusLabel || quickFocus ? `，重点为「${quickFocusLabel || quickFocus}」。` : ""}
-              </div>
-            </div>
-          )}
+        <AppSection
+          title="2. 选择训练专题"
+          subtitle="优先展示当前更值得先练的专题；如果你已经知道方向，也可以切换到分类视图。"
+          className="w-full max-w-[700px]"
+        >
+          <div ref={topicSectionRef}>
+            {presetNotice && (
+              <SurfaceCard className="mb-4 px-4 py-3 border-accent/15 bg-accent/5">
+                <div className="text-[13px] font-semibold text-text mb-1">已应用推荐训练目标</div>
+                <div className="text-[12px] text-dim">
+                  {presetNotice}
+                  {selectedTopic ? `：当前已选「${selectedTopicInfo?.name || selectedTopic}」` : "。"}
+                  {quickFocusLabel || quickFocus ? `，重点为「${quickFocusLabel || quickFocus}」。` : ""}
+                </div>
+              </SurfaceCard>
+            )}
           {(quickFocus || primaryRecommendation?.topic) && (
-            <div className={`${panelTone("recommend")} mb-4 rounded-xl px-4 py-3`}>
+            <SurfaceCard className="mb-4 px-4 py-3 border-green/20">
               <div className="text-[13px] font-semibold text-text mb-1">当前训练目标</div>
               <div className="text-[12px] text-dim">
                 {quickFocus
                   ? `优先围绕「${quickFocusLabel || quickFocus}」${recommendationTrend === "进入平台期" ? "升级追问与场景题验证" : recommendationTrend === "出现回退" ? "先做降阶稳固训练" : recommendationTrend === "持续上升" ? "做更深一层的验收" : "修复薄弱点"}，再进入当前专题训练。`
                   : `建议优先训练「${topics[primaryRecommendation?.topic]?.name || primaryRecommendation?.topic || "当前推荐专题"}」${primaryRecommendation?.focus_label ? `，并从「${primaryRecommendation.focus_label}」切入。` : "。"}${recommendationTrend ? ` 当前轨迹为「${recommendationTrend}」。` : ""}`}
               </div>
-            </div>
+            </SurfaceCard>
           )}
           <div className="flex justify-between items-center gap-3 mb-4 flex-wrap">
             <div>
@@ -523,7 +556,7 @@ export default function Home() {
               <div className="mt-1 text-[12px] text-dim">先快速选专题，详细说明会在下方展开。</div>
             </div>
             {primaryRecommendation?.topic && !selectedTopic && (
-              <button
+              <SubtleButton
                 onClick={() => {
                   setSelectedTopic(primaryRecommendation.topic);
                   setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
@@ -532,13 +565,13 @@ export default function Home() {
                   setPresetNotice("已应用推荐训练目标");
                   setTimeout(() => scrollToSummary(), 120);
                 }}
-                className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light"
+                className="py-2 text-[12px]"
               >
                 使用当前推荐
-              </button>
+              </SubtleButton>
             )}
           </div>
-          <div className="mb-3 rounded-2xl border border-border/70 bg-card/70 px-3 py-3 backdrop-blur-sm">
+          <SurfaceCard className="mb-3 px-3 py-3 bg-card/70 backdrop-blur-sm border-border/70">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="muted">按当前薄弱程度排序</Badge>
@@ -565,7 +598,7 @@ export default function Home() {
                 ? "默认只展示当前最值得先看的专题；如果需要，也可以展开全部。"
                 : "按专题类型分组浏览，更适合已经知道自己要练什么方向时使用。"}
             </div>
-          </div>
+          </SurfaceCard>
 
           {topicView === "priority" ? (
             <>
@@ -670,7 +703,7 @@ export default function Home() {
           )}
 
           {selectedTopic && (
-            <div className="mb-8 rounded-2xl border border-border bg-card px-4 py-4 md:px-5">
+            <SurfaceCard className="mb-8 px-4 py-4 md:px-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -727,15 +760,20 @@ export default function Home() {
                   {recommendationSecondaryHint ? ` ${recommendationSecondaryHint}` : " 先用一轮训练确认真实薄弱点，再决定是否继续深入。"}
                 </div>
               )}
-            </div>
+            </SurfaceCard>
           )}
-        </div>
+          </div>
+        </AppSection>
       )}
 
-      {/* Start summary + button */}
       {mode && (
-        <div className="w-full max-w-[700px]" ref={summarySectionRef}>
-                    <div className={`${panelTone("summary")} mb-4 rounded-xl px-4 py-3 transition-all ${summaryFlash ? "ring-2 ring-accent/30 shadow-[0_0_0_1px_rgba(245,158,11,0.15)]" : ""}`}>
+        <AppSection
+          title="3. 确认并开始"
+          subtitle="把这一轮的模式、专题和重点确认好，再直接进入训练。"
+          className="w-full max-w-[700px]"
+        >
+          <div ref={summarySectionRef}>
+                    <SurfaceCard className={`mb-4 px-4 py-3 transition-all ${summaryFlash ? "ring-2 ring-accent/30 shadow-[0_0_0_1px_rgba(245,158,11,0.15)]" : ""}`}>
             <div className="text-[13px] font-semibold text-text mb-2">开始前确认</div>
             <div className="flex flex-wrap gap-2 mb-2">
               <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent-light">
@@ -764,26 +802,29 @@ export default function Home() {
                   ? `${quickFocusLabel || quickFocus ? `本轮会先围绕「${quickFocusLabel || quickFocus}」做定向修复，` : ""}随后进入「${selectedTopicInfo?.name || selectedTopic}」专题训练。`
                   : "请先选择一个训练专题。"}
             </div>
-          </div>
+          </SurfaceCard>
           <div className="mb-2 text-[13px] font-semibold text-dim">确认后开始</div>
-          <div className="rounded-2xl border border-border bg-card px-4 py-4 md:px-5">
-            <button
-              className={`w-full py-3.5 rounded-box bg-gradient-to-r from-accent to-orange text-white text-base font-semibold transition-all ${!canStart || loading ? "opacity-40 cursor-not-allowed" : "hover:shadow-[0_0_24px_rgba(245,158,11,0.2)]"}`}
+          <SurfaceCard className="px-4 py-4 md:px-5">
+            <PrimaryButton
+              className={`w-full py-3.5 text-base ${!canStart || loading ? "opacity-40 cursor-not-allowed hover:shadow-none" : ""}`}
               disabled={!canStart || loading}
               onClick={handleStart}
               title={!canStart && !loading ? disabledReason : ""}
             >
               {loading ? "正在初始化训练..." : mode === "topic_drill" ? "开始本轮训练" : "开始简历模拟"}
-            </button>
+              {!loading && <ArrowRight size={16} />}
+            </PrimaryButton>
             {!canStart && !loading && disabledReason && (
               <div className="mt-2 text-[12px] text-dim leading-[1.7]">{disabledReason}</div>
             )}
             {canStart && !loading && (
               <div className="mt-2 text-[12px] text-dim leading-[1.7]">配置已完成，可以直接开始。</div>
             )}
+          </SurfaceCard>
           </div>
-        </div>
+        </AppSection>
       )}
+      </div>
     </div>
   );
 }

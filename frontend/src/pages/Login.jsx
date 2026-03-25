@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sparkles, CheckCircle2 } from "lucide-react";
+import { Badge, PrimaryButton, SurfaceCard, TextInput } from "../components/ui.jsx";
 
 export default function Login() {
   const [isRegister, setIsRegister] = useState(false);
-  const [allowReg, setAllowReg] = useState(null); // null = loading
+  const [allowReg, setAllowReg] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -57,107 +58,121 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center px-4 relative">
-      {/* Subtle glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px]
-                      bg-gradient-to-b from-accent/8 to-transparent rounded-full blur-[80px] pointer-events-none" />
+    <div className="relative min-h-screen overflow-hidden bg-bg px-4 py-8 md:px-6">
+      <div className="pointer-events-none absolute left-1/2 top-0 h-[320px] w-[680px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.12),transparent_62%)] blur-3xl" />
 
-      <div className="w-full max-w-sm relative z-10">
-        {/* Back to landing */}
-        <button
-          onClick={() => navigate("/")}
-          className="flex items-center gap-1.5 text-sm text-dim hover:text-text transition-colors mb-8"
-        >
-          <ArrowLeft size={16} />
-          返回首页
-        </button>
-
-        {/* Logo & title */}
-        <div className="flex items-center gap-3 mb-8">
-          <img src="/favicon.svg" alt="TechSpar" className="w-10 h-10 rounded-xl" />
-          <div>
-            <h1 className="text-xl font-display font-bold text-text">
-              {isRegister ? "创建账号" : "欢迎回来"}
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center justify-center">
+        <div className="grid w-full items-center gap-8 lg:grid-cols-[minmax(320px,0.9fr)_minmax(360px,420px)]">
+          <div className="hidden lg:block pr-8">
+            <Badge tone="accent" className="mb-5 gap-1.5 px-3 py-1.5 text-[12px]">
+              <Sparkles size={14} />
+              Continue your interview training
+            </Badge>
+            <h1 className="max-w-xl text-[44px] font-display font-bold leading-[1.06] tracking-[-0.04em] text-text">
+              登录后，继续你上一次没有练完的进步轨迹。
             </h1>
-            <p className="text-sm text-dim">
-              {isRegister ? "注册后开始你的面试训练" : "登录继续你的面试训练"}
+            <p className="mt-5 max-w-lg text-[15px] leading-8 text-dim">
+              不是单次问答，而是持续记录、复盘和定向强化。TechSpar 会把你的薄弱点、改进建议与下一轮训练连接起来。
             </p>
-          </div>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {isRegister && (
-            <div>
-              <label className="block text-sm text-dim mb-1.5">昵称</label>
-              <input
-                type="text"
-                placeholder="你的称呼（选填）"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-lg bg-card border border-border text-text text-sm
-                           focus:outline-none focus:border-accent transition-colors placeholder:text-dim/50"
-              />
+            <div className="mt-8 space-y-3 text-[14px] text-dim">
+              {[
+                "记录每次训练后的薄弱点与改进方向",
+                "根据历史表现自动推荐下一轮练习重点",
+                "支持专项训练、简历模拟与真实录音复盘",
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3">
+                  <CheckCircle2 size={16} className="mt-1 text-accent-light" />
+                  <span>{item}</span>
+                </div>
+              ))}
             </div>
-          )}
-
-          <div>
-            <label className="block text-sm text-dim mb-1.5">邮箱</label>
-            <input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-3.5 py-2.5 rounded-lg bg-card border border-border text-text text-sm
-                         focus:outline-none focus:border-accent transition-colors placeholder:text-dim/50"
-            />
           </div>
 
-          <div>
-            <label className="block text-sm text-dim mb-1.5">密码</label>
-            <input
-              type="password"
-              placeholder={isRegister ? "至少 6 个字符" : "输入密码"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-3.5 py-2.5 rounded-lg bg-card border border-border text-text text-sm
-                         focus:outline-none focus:border-accent transition-colors placeholder:text-dim/50"
-            />
-          </div>
-
-          {error && (
-            <div className="px-3 py-2 rounded-lg bg-red/10 border border-red/20 text-red text-sm">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-gradient-to-r from-accent to-orange text-black
-                       font-semibold text-sm hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]
-                       transition-all disabled:opacity-50 mt-2"
-          >
-            {loading ? "处理中..." : isRegister ? "注册" : "登录"}
-          </button>
-        </form>
-
-        {/* Toggle — only show if registration is allowed */}
-        {allowReg && (
-          <div className="mt-6 pt-5 border-t border-border text-center">
-            <span className="text-sm text-dim">
-              {isRegister ? "已有账号？" : "还没有账号？"}
-            </span>
+          <SurfaceCard elevated className="w-full px-6 py-6 md:px-7 md:py-7">
             <button
-              onClick={() => { setIsRegister(!isRegister); setError(""); }}
-              className="text-sm text-accent font-medium ml-1.5 hover:underline"
+              onClick={() => navigate("/")}
+              className="mb-6 flex items-center gap-1.5 text-[13px] text-dim transition-colors hover:text-text"
             >
-              {isRegister ? "去登录" : "注册"}
+              <ArrowLeft size={16} />
+              返回首页
             </button>
-          </div>
-        )}
+
+            <div className="mb-7 flex items-center gap-3">
+              <img src="/favicon.svg" alt="TechSpar" className="h-11 w-11 rounded-2xl" />
+              <div>
+                <h1 className="text-[24px] font-display font-bold tracking-[-0.02em] text-text">
+                  {isRegister ? "创建账号" : "欢迎回来"}
+                </h1>
+                <p className="text-[13px] leading-6 text-dim">
+                  {isRegister ? "注册后开始你的第一轮面试训练" : "登录继续你的面试训练与复盘"}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {isRegister && (
+                <div>
+                  <label className="mb-1.5 block text-[13px] text-dim">昵称</label>
+                  <TextInput
+                    type="text"
+                    placeholder="你的称呼（选填）"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1.5 block text-[13px] text-dim">邮箱</label>
+                <TextInput
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-[13px] text-dim">密码</label>
+                <TextInput
+                  type="password"
+                  placeholder={isRegister ? "至少 6 个字符" : "输入密码"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="rounded-xl border border-red/20 bg-red/10 px-3.5 py-2.5 text-[13px] text-red">
+                  {error}
+                </div>
+              )}
+
+              <PrimaryButton type="submit" disabled={loading} className="mt-2 w-full py-3 text-sm">
+                {loading ? "处理中..." : isRegister ? "注册" : "登录"}
+              </PrimaryButton>
+            </form>
+
+            {allowReg && (
+              <div className="mt-6 border-t border-border pt-5 text-center">
+                <span className="text-[13px] text-dim">
+                  {isRegister ? "已有账号？" : "还没有账号？"}
+                </span>
+                <button
+                  onClick={() => {
+                    setIsRegister(!isRegister);
+                    setError("");
+                  }}
+                  className="ml-1.5 text-[13px] font-medium text-accent hover:underline"
+                >
+                  {isRegister ? "去登录" : "注册"}
+                </button>
+              </div>
+            )}
+          </SurfaceCard>
+        </div>
       </div>
     </div>
   );

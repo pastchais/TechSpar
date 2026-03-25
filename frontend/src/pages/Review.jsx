@@ -1,7 +1,7 @@
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { PageTitle, SectionTitle, SubtleButton, Badge, OutlineButton } from "../components/ui.jsx";
+import { AppSection, PageTitle, SectionTitle, SubtleButton, Badge, OutlineButton, PrimaryButton, SurfaceCard } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
 import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview, getHistory, getAnalysisStatus } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
@@ -708,7 +708,7 @@ function DrillReview({
       </div>
 
       {showSummary && (
-        <div className="mb-6 rounded-2xl border border-border bg-card px-5 py-5 md:px-6">
+        <SurfaceCard className="mb-6 px-5 py-5 md:px-6">
           <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
             <div>
               <div className="text-lg font-semibold mb-2">整体评价</div>
@@ -797,7 +797,7 @@ function DrillReview({
               />
             </div>
           </details>
-        </div>
+        </SurfaceCard>
       )}
 
       <SectionTitle className="mt-2">逐题复盘</SectionTitle>
@@ -813,15 +813,18 @@ function DrillReview({
         const followupSectionOpen = sectionState.followup ?? true;
 
         return (
-          <div className="mb-4 rounded-[24px] border border-border bg-card/80 p-3 md:p-4">
+          <SurfaceCard className="mb-4 p-3 md:p-4 bg-card/80">
             <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4">
-              <div className="rounded-2xl border border-border/60 bg-card/60 p-3 md:p-4">
+              <SurfaceCard className="p-3 md:p-4 bg-card/60 border-border/60">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
                     <div className="text-[14px] font-semibold text-text">题目目录</div>
                     <div className="text-[11px] text-dim mt-0.5">先跳到最值得复盘的题，再逐题往后看。</div>
                   </div>
-                  <Badge tone="muted">共 {questionItems.length} 题</Badge>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <Badge tone="red">低分优先</Badge>
+                    <Badge tone="muted">共 {questionItems.length} 题</Badge>
+                  </div>
                 </div>
 
                 <div className="lg:hidden -mx-1 overflow-x-auto pb-1">
@@ -835,7 +838,7 @@ function DrillReview({
                           key={item.q.id}
                           type="button"
                           onClick={() => setActiveQuestionId(item.q.id)}
-                          className={`rounded-xl border px-3 py-2 text-left min-w-[120px] transition-all ${active ? "border-accent bg-accent/8" : "border-border bg-card"}`}
+                          className={`rounded-xl border px-3 py-2 text-left min-w-[120px] transition-all ${active ? "border-accent bg-accent/8" : low ? "border-red/30 bg-red/5" : "border-border bg-card"}`}
                         >
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{idx + 1}</span>
@@ -865,7 +868,7 @@ function DrillReview({
                         key={item.q.id}
                         type="button"
                         onClick={() => setActiveQuestionId(item.q.id)}
-                        className={`group relative w-full rounded-xl px-3 py-2.5 text-left transition-all ${active ? "bg-accent/8 text-text" : "bg-transparent hover:bg-hover/70 text-text"}`}
+                        className={`group relative w-full rounded-xl px-3 py-2.5 text-left transition-all ${active ? "bg-accent/8 text-text" : low ? "bg-red/5 text-text hover:bg-red/8" : "bg-transparent hover:bg-hover/70 text-text"}`}
                       >
                         <div className={`absolute left-0 top-2 bottom-2 w-[2px] rounded-full transition-all ${active ? "bg-accent-light opacity-100" : "bg-border opacity-0 group-hover:opacity-100"}`} />
                         <div className="pl-2">
@@ -891,10 +894,10 @@ function DrillReview({
                     );
                   })}
                 </div>
-              </div>
+              </SurfaceCard>
 
               <div>
-                <div className="mb-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 sticky top-2 z-[1]">
+                <SurfaceCard className="mb-3 px-4 py-3 sticky top-2 z-[1] bg-card/70 border-border/70">
                   <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge tone="accent">当前查看 Q{q.id}</Badge>
@@ -905,9 +908,9 @@ function DrillReview({
                     <div className="text-[12px] text-dim">第 {activeIndex + 1} / {questionItems.length} 题</div>
                   </div>
                   <div className="text-[12px] leading-[1.7] text-dim">像翻书一样逐题查看；左侧目录负责跳题，右侧负责深入复盘。</div>
-                </div>
+                </SurfaceCard>
 
-                <div className="bg-card border border-border rounded-2xl px-4 py-4 md:px-5 mb-4 animate-fade-in">
+                <SurfaceCard className="px-4 py-4 md:px-5 mb-4 animate-fade-in">
                   <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
@@ -918,6 +921,16 @@ function DrillReview({
                   </div>
 
                   <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
+
+                  <div className="mb-3 rounded-xl border border-border/70 bg-hover/60 px-3 py-2.5 text-[13px] leading-[1.7] text-dim">
+                    {isSkipped
+                      ? "这题没有作答，优先级取决于它是否属于本轮 focus。若属于，建议先补；否则可放到第二轮。"
+                      : numericScore != null && numericScore < 6
+                        ? "这题建议优先修。先看缺失点和参考答案，再生成改进版答案，最后带着改进版回练。"
+                        : numericScore != null && numericScore < 8
+                          ? "这题已经有基础，但还不够稳。重点看评分细项和改进建议，把回答打磨到更自然、更完整。"
+                          : "这题整体通过度较高，更适合作为高分样本，用来对照你其它题的表达方式。"}
+                  </div>
 
                   {isSkipped ? (
                     <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
@@ -1047,7 +1060,7 @@ function DrillReview({
                       )}
                     </div>
                   )}
-                </div>
+                </SurfaceCard>
 
                 <div className="flex items-center justify-between gap-3">
                   <OutlineButton onClick={() => activeIndex > 0 && setActiveQuestionId(questionItems[activeIndex - 1].q.id)} disabled={activeIndex <= 0} className="px-3 py-2 text-[12px] disabled:opacity-40">上一题</OutlineButton>
@@ -1056,7 +1069,7 @@ function DrillReview({
                 </div>
               </div>
             </div>
-          </div>
+          </SurfaceCard>
         );
       })()}
     </>
@@ -1197,11 +1210,29 @@ export default function Review() {
 
   return (
     <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-[1400px] mx-auto w-full">
-      <PageTitle
-        className="mb-8"
-        title={isRecording ? "录音复盘" : showDrill ? "训练复盘" : "面试复盘"}
-        subtitle={`Session: ${sessionId}`}
-      />
+      <section className="mb-6 overflow-hidden rounded-[32px] border border-border/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.07),rgba(245,158,11,0.02))] px-5 py-6 md:px-7 md:py-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <PageTitle
+            className="mb-0"
+            title={isRecording ? "录音复盘" : showDrill ? "训练复盘" : "面试复盘"}
+            subtitle={showDrill ? "先看这轮训练是否真的命中了目标、是否形成了可重复的改进，再进入逐题深挖。" : `Session: ${sessionId}`}
+          />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[420px]">
+            <SurfaceCard className="px-4 py-4 bg-card/85">
+              <div className="text-[12px] text-dim">复盘类型</div>
+              <div className="mt-2 text-[16px] font-semibold text-text">{isRecording ? "录音复盘" : showDrill ? "训练复盘" : "面试复盘"}</div>
+            </SurfaceCard>
+            <SurfaceCard className="px-4 py-4 bg-card/85">
+              <div className="text-[12px] text-dim">复盘重点</div>
+              <div className="mt-2 text-[16px] font-semibold text-text">{showDrill ? (overall?.practice_comparison?.focus_label || overall?.targeting_stats?.focus_label || "目标命中与回升") : "总体表现与回答质量"}</div>
+            </SurfaceCard>
+            <SurfaceCard className="px-4 py-4 bg-card/85">
+              <div className="text-[12px] text-dim">Session</div>
+              <div className="mt-2 text-[13px] font-medium text-dim break-all">{sessionId}</div>
+            </SurfaceCard>
+          </div>
+        </div>
+      </section>
 
       {isRecording && !isRecordingDual ? (
         <SoloRecordingReview topicsCovered={topicsCovered} overall={overall} />
@@ -1209,47 +1240,46 @@ export default function Review() {
         <DrillReview sessionId={sessionId} scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} autoScore={autoScore} practiceTrend={practiceTrend} persistedReferenceAnswers={referenceAnswers} persistedReferenceFollowups={referenceFollowups} persistedImprovedAnswers={improvedAnswers} />
       ) : (
         <>
-          <DimensionScores
-            dimensionScores={stateData.dimension_scores || overall?.dimension_scores}
-            avgScore={stateData.avg_score ?? overall?.avg_score}
-          />
-          <div className="bg-card border border-border rounded-box px-5 py-6 md:px-8 leading-[1.8] text-[15px]">
-            <div className="md-content">
-              <ReactMarkdown>{review || ""}</ReactMarkdown>
-            </div>
-          </div>
+          <AppSection title="结论优先" subtitle="先看总体判断，再决定要不要展开完整复盘文本和原始面试记录。" className="mb-6">
+            <DimensionScores
+              dimensionScores={stateData.dimension_scores || overall?.dimension_scores}
+              avgScore={stateData.avg_score ?? overall?.avg_score}
+            />
+            <SurfaceCard className="px-5 py-6 md:px-8 leading-[1.8] text-[15px]">
+              <div className="md-content">
+                <ReactMarkdown>{review || ""}</ReactMarkdown>
+              </div>
+            </SurfaceCard>
+          </AppSection>
 
           {messages.length > 0 && (
-            <>
-              <button
-                className="mt-6 mr-3 px-5 py-2.5 rounded-box bg-transparent text-accent-light text-sm border border-border cursor-pointer"
+            <AppSection title="原始面试记录" subtitle="当你需要核对上下文、追问路径或真实表达状态时，再展开查看。">
+              <SubtleButton
+                className="mr-3 px-5 py-2.5"
                 onClick={() => setShowTranscript(!showTranscript)}
               >
                 {showTranscript ? "收起面试记录" : "查看面试记录"}
-              </button>
+              </SubtleButton>
               {showTranscript && (
-                <div className="mt-4 bg-card border border-border rounded-box px-4 py-5 md:px-6 max-h-[500px] overflow-y-auto">
+                <SurfaceCard className="mt-4 max-h-[500px] overflow-y-auto px-4 py-5 md:px-6">
                   {messages.map((msg, i) => (
-                    <div key={i} className="py-2 border-b border-border text-sm leading-relaxed">
+                    <div key={i} className="border-b border-border py-2 text-sm leading-relaxed last:border-b-0">
                       <strong style={{ color: msg.role === "user" ? "var(--accent-light)" : "var(--green)" }}>
                         {msg.role === "user" ? "你" : "面试官"}:
                       </strong>{" "}
                       {msg.content}
                     </div>
                   ))}
-                </div>
+                </SurfaceCard>
               )}
-            </>
+            </AppSection>
           )}
         </>
       )}
 
-      <button
-        className="inline-block mt-6 px-6 py-2.5 rounded-box bg-hover text-text text-sm border border-border cursor-pointer"
-        onClick={() => navigate("/")}
-      >
-        返回首页
-      </button>
+      <div className="mt-6 flex">
+        <PrimaryButton onClick={() => navigate("/")}>返回首页</PrimaryButton>
+      </div>
     </div>
   );
 }
