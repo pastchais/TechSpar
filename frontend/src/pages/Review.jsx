@@ -1390,9 +1390,6 @@ export default function Review() {
         </>
       )}
 
-      <div className="mt-6 flex">
-        <PrimaryButton onClick={() => navigate("/")}>返回首页</PrimaryButton>
-      </div>
     </div>
   );
 }
