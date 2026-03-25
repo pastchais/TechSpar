@@ -31,6 +31,29 @@ services_for() {
   esac
 }
 
+rebuild_image_if_needed() {
+  local target="$1"
+
+  case "$target" in
+    frontend)
+      local image_tag
+      image_tag=$(grep '^TECHSPAR_FRONTEND_IMAGE=' "$ROOT/.env" | cut -d= -f2- || true)
+      image_tag="${image_tag:-techspar_techspar-frontend:latest}"
+      docker build -t "$image_tag" "$ROOT/frontend"
+      ;;
+    backend)
+      local image_tag
+      image_tag=$(grep '^TECHSPAR_BACKEND_IMAGE=' "$ROOT/.env" | cut -d= -f2- || true)
+      image_tag="${image_tag:-techspar_techspar-backend:latest}"
+      docker build -t "$image_tag" -f "$ROOT/backend/Dockerfile" "$ROOT"
+      ;;
+    all)
+      rebuild_image_if_needed backend
+      rebuild_image_if_needed frontend
+      ;;
+  esac
+}
+
 deploy_services() {
   local target="$1"
   local services="$2"
@@ -39,6 +62,8 @@ deploy_services() {
   if [ "$target" != "all" ]; then
     up_flags="$up_flags --no-deps"
   fi
+
+  rebuild_image_if_needed "$target"
 
   # shellcheck disable=SC2086
   "$COMPOSE" -f "$COMPOSE_FILE" build $services

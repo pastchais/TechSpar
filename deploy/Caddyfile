@@ -1,4 +1,4 @@
-aari.top, www.aari.top, stu.6bits.de {
+stu.6bits.de {
     encode gzip zstd
 
     @api path /api/*
