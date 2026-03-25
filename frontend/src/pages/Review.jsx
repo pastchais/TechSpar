@@ -545,437 +545,84 @@ function SoloRecordingReview({ topicsCovered, overall }) {
   const avgScore = overall?.avg_score || "-";
   return (
     <>
-      {/* Overall summary */}
-      <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
-        <div className="text-lg font-semibold mb-3">整体评价</div>
-        <div>
-          <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
-            {avgScore}
-          </span>
-          <span className="text-base text-dim">/10</span>
-        </div>
-        {overall?.summary && (
-          <div className="mt-4 text-[15px] leading-[1.8] text-text">{overall.summary}</div>
-        )}
+      <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+        <SectionTitle className="mb-0">复盘阅读器</SectionTitle>
+        <SubtleButton onClick={() => setShowSummary((v) => !v)} className="px-3 py-2 text-[12px]">
+          {showSummary ? "隐藏整体评价" : "显示整体评价"}
+        </SubtleButton>
       </div>
 
-      {/* Weak & strong points */}
-      {overall?.new_weak_points?.length > 0 && (
-        <>
-          <SectionTitle className="mt-2">薄弱点</SectionTitle>
-          <div className="flex flex-col gap-1.5 mb-4">
-            {overall.new_weak_points.map((wp, i) => (
-              <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">
-                {typeof wp === "string" ? wp : wp.point || JSON.stringify(wp)}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      {overall?.new_strong_points?.length > 0 && (
-        <>
-          <SectionTitle className="mt-2">亮点</SectionTitle>
-          <div className="flex flex-col gap-1.5 mb-4">
-            {overall.new_strong_points.map((sp, i) => (
-              <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/8 border border-green/20">
-                {typeof sp === "string" ? sp : sp.point || JSON.stringify(sp)}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Topics covered */}
-      {topicsCovered?.length > 0 && (
-        <>
-          <SectionTitle className="mt-2">涉及知识点</SectionTitle>
-          {topicsCovered.map((t, i) => {
-            const score = t.score;
-            const sc = typeof score === "number" ? getScoreColor(score) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
-            return (
-              <div key={i} className="bg-card border border-border rounded-xl px-4 py-4 md:px-5 mb-4 animate-fade-in">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[15px] font-medium">{topicDisplayName(t.topic, topics) || "未知知识点"}</span>
-                  <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
-                    {score ?? "-"}/10
-                  </span>
-                </div>
-                {t.assessment && <div className="text-sm leading-[1.7] text-text mb-2">{t.assessment}</div>}
-                {t.understanding && <div className="text-[13px] text-dim italic mb-1">理解程度: {t.understanding}</div>}
-                {t.errors?.length > 0 && <div className="text-[13px] text-red leading-normal">错误: {t.errors.join("、")}</div>}
-                {t.missing?.length > 0 && <div className="text-[13px] text-dim leading-normal">遗漏: {t.missing.join("、")}</div>}
-              </div>
-            );
-          })}
-        </>
-      )}
-    </>
-  );
-}
-
-function DrillReview({ sessionId, scores, overall, questions, answers, topic, topics, persistedReferenceAnswers = {}, persistedReferenceFollowups = {}, persistedImprovedAnswers = {} }) {
-  const navigate = useNavigate();
-  const answerMap = {};
-  for (const a of (answers || [])) answerMap[a.question_id] = a.answer;
-  const scoreMap = {};
-  for (const s of (scores || [])) scoreMap[s.question_id] = s;
-  const [refAnswers, setRefAnswers] = useState(() => {
-    const seeded = {};
-    Object.entries(persistedReferenceAnswers || {}).forEach(([key, value]) => {
-      const qid = value?.question_id;
-      if (qid != null) seeded[qid] = value;
-    });
-    return seeded;
-  });
-  const [refLoading, setRefLoading] = useState({});
-  const [followupOpen, setFollowupOpen] = useState({});
-  const [followupInput, setFollowupInput] = useState({});
-  const [followupLoading, setFollowupLoading] = useState({});
-  const [improvedLoading, setImprovedLoading] = useState({});
-  const [improvedAnswers, setImprovedAnswers] = useState(() => {
-    const seeded = {};
-    Object.entries(persistedImprovedAnswers || {}).forEach(([key, value]) => {
-      const qid = value?.question_id;
-      if (qid != null) seeded[qid] = value;
-    });
-    return seeded;
-  });
-  const [followupHistory, setFollowupHistory] = useState(() => {
-    const seeded = {};
-    Object.entries(persistedReferenceFollowups || {}).forEach(([key, items]) => {
-      const qid = String(key || "").startsWith("q:") ? Number(String(key).slice(2)) : null;
-      if (qid != null && !Number.isNaN(qid)) seeded[qid] = items || [];
-    });
-    return seeded;
-  });
-
-  const questionItems = (questions || []).map((q) => {
-    const s = scoreMap[q.id] || {};
-    const answer = answerMap[q.id];
-    const isSkipped = !answer;
-    const numericScore = typeof s.score === "number" ? s.score : null;
-    const priority = [
-      isSkipped ? 0 : 1,
-      s.focus_hit ? 3 : 0,
-      numericScore != null ? Math.max(0, 10 - numericScore) : 0,
-      s.key_missing?.length || 0,
-      s.improved ? 0 : 0.5,
-    ].reduce((a, b) => a + b, 0);
-    return { q, s, answer, isSkipped, numericScore, priority };
-  });
-
-  const defaultQuestionId = questionItems.length
-    ? [...questionItems].sort((a, b) => b.priority - a.priority)[0]?.q?.id
-    : null;
-  const [activeQuestionId, setActiveQuestionId] = useState(defaultQuestionId);
-
-  useEffect(() => {
-    if (!questionItems.length) return;
-    if (!activeQuestionId || !questionItems.some((item) => item.q.id === activeQuestionId)) {
-      setActiveQuestionId(defaultQuestionId || questionItems[0]?.q?.id || null);
-    }
-  }, [questions, scores]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const activeIndex = questionItems.findIndex((item) => item.q.id === activeQuestionId);
-  const activeItem = activeIndex >= 0 ? questionItems[activeIndex] : questionItems[0] || null;
-
-  const handleRefAnswer = async (qId, questionText, forceRegenerate = false) => {
-    if (refAnswers[qId]?.reference_answer && !forceRegenerate) return;
-    setRefLoading((p) => ({ ...p, [qId]: true }));
-    try {
-      const data = await getReferenceAnswer(sessionId, topic, questionText, qId, forceRegenerate);
-      setRefAnswers((p) => ({
-        ...p,
-        [qId]: {
-          reference_answer: data.reference_answer,
-          generated_at: data.generated_at,
-          cached: data.cached,
-          question_key: data.question_key,
-          knowledge_refs: data.knowledge_refs || [],
-          model: data.model,
-        },
-      }));
-    } catch (e) {
-      setRefAnswers((p) => ({
-        ...p,
-        [qId]: {
-          reference_answer: "生成失败: " + e.message,
-          generated_at: null,
-          cached: false,
-          question_key: null,
-          knowledge_refs: [],
-        },
-      }));
-    }
-    setRefLoading((p) => ({ ...p, [qId]: false }));
-  };
-
-  const handleFollowup = async (qId, questionText) => {
-    const text = (followupInput[qId] || "").trim();
-    const referenceAnswer = refAnswers[qId]?.reference_answer || "";
-    if (!text) return;
-    setFollowupLoading((p) => ({ ...p, [qId]: true }));
-    try {
-      const data = await followupReferenceAnswer(sessionId, topic, questionText, text, qId, referenceAnswer);
-      setFollowupHistory((p) => ({ ...p, [qId]: data.history || [] }));
-      setFollowupInput((p) => ({ ...p, [qId]: "" }));
-    } catch (e) {
-      setFollowupHistory((p) => ({
-        ...p,
-        [qId]: [
-          ...(p[qId] || []),
-          {
-            followup: text,
-            answer: "追问失败: " + e.message,
-            created_at: new Date().toISOString(),
-            model: null,
-            error: true,
-          },
-        ],
-      }));
-    }
-    setFollowupLoading((p) => ({ ...p, [qId]: false }));
-  };
-
-  const handleImprovedAnswer = async (qId, questionText) => {
-    const referenceAnswer = refAnswers[qId]?.reference_answer || "";
-    const originalAnswer = answerMap[qId] || "";
-    if (!referenceAnswer) return;
-    setImprovedLoading((p) => ({ ...p, [qId]: true }));
-    try {
-      const data = await getImprovedAnswer(sessionId, topic, questionText, originalAnswer, qId, referenceAnswer, false);
-      setImprovedAnswers((p) => ({
-        ...p,
-        [qId]: {
-          improved_answer: data.improved_answer,
-          generated_at: data.generated_at,
-          cached: data.cached,
-          question_key: data.question_key,
-          model: data.model,
-        },
-      }));
-    } catch (e) {
-      setImprovedAnswers((p) => ({
-        ...p,
-        [qId]: {
-          improved_answer: "生成失败: " + e.message,
-          generated_at: null,
-          cached: false,
-          question_key: null,
-          model: null,
-        },
-      }));
-    }
-    setImprovedLoading((p) => ({ ...p, [qId]: false }));
-  };
-
-  const handlePracticeImprovedAnswer = async (qId, questionText, focusArea = "") => {
-    const improved = improvedAnswers[qId]?.improved_answer || "";
-    const focusLabel = scoreMap[qId]?.weak_point || focusArea || "改进版回答复练";
-    if (!improved || !topic) return;
-    try {
-      const data = await startInterview("topic_drill", topic, {
-        focusKeyword: `${questionText} ${focusLabel}`,
-        focusLabel,
-        practiceContext: `原题：${questionText}\n\n你的原回答：${answerMap[qId] || "（无）"}\n\n改进版答案：${improved}`,
-        practiceBaseline: {
-          question: questionText,
-          focus_label: focusLabel,
-          focus_trend: overall?.targeting_stats?.focus_trend || overall?.practice_comparison?.baseline?.focus_trend || "",
-          source_score: scoreMap[qId]?.score ?? null,
-          original_answer: answerMap[qId] || "",
-          improved_answer: improved,
-        },
-      });
-      navigate(`/interview/${data.session_id}`, { state: data });
-    } catch (e) {
-      alert(`启动复练失败：${e.message}`);
-    }
-  };
-
-  const avgScore = overall?.avg_score || "-";
-
-  return (
-    <>
-      {/* Overall summary */}
-      <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
-        <div className="text-lg font-semibold mb-3">整体评价</div>
-        <div>
-          <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
-            {avgScore}
-          </span>
-          <span className="text-base text-dim">/10</span>
-        </div>
-        {overall?.summary && (
-          <div className="mt-4 text-[15px] leading-[1.8] text-text">{overall.summary}</div>
-        )}
-        <div className="flex flex-wrap gap-4 mt-4">
-          <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
-            共 {questions?.length || 0} 题
-          </span>
-          <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
-            已答 {answers?.filter((a) => a.answer).length || 0} 题
-          </span>
-        </div>
-      </div>
-
-      {/* Targeting stats */}
-      {overall?.targeting_stats && (
-        <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
-          <SectionTitle>针对性训练命中</SectionTitle>
-          {overall.targeting_stats.focus_label && (
-            <div className="mb-4 rounded-xl border border-green/20 bg-green/5 px-4 py-3">
-              <div className="text-[13px] font-semibold text-text mb-1">本次显式修复目标</div>
-              <div className="text-[12px] text-dim leading-[1.7]">
-                围绕「{overall.targeting_stats.focus_label}」启动本轮 drill。
-                前3题命中 {overall.targeting_stats.front3_focus_hits || 0} 次，
-                全场命中 {overall.targeting_stats.focus_hit_count || 0} / {overall.targeting_stats.attempted_questions || 0} 题。
+      {showSummary && (
+        <div className="mb-6 rounded-2xl border border-border bg-card px-5 py-5 md:px-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+            <div>
+              <div className="text-lg font-semibold mb-2">整体评价</div>
+              <div>
+                <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
+                  {avgScore}
+                </span>
+                <span className="text-base text-dim">/10</span>
               </div>
             </div>
-          )}
-          <div className="flex flex-wrap gap-3 mb-4">
-            <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
-              命中率 {(overall.targeting_stats.hit_rate * 100).toFixed(0)}%
-            </span>
-            <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
-              修复率 {(overall.targeting_stats.repair_rate * 100).toFixed(0)}%
-            </span>
-            <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
-              前3题命中高优先级点 {overall.targeting_stats.front3_high_priority_hits || 0} 次
-            </span>
-            {overall.targeting_stats.focus_label && (
+            <div className="flex flex-wrap gap-3">
               <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
-                focus 命中率 {((overall.targeting_stats.focus_hit_rate || 0) * 100).toFixed(0)}%
+                共 {questions?.length || 0} 题
               </span>
+              <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
+                已答 {answers?.filter((a) => a.answer).length || 0} 题
+              </span>
+              {overall?.targeting_stats?.focus_label && (
+                <span className="inline-flex items-center rounded-lg bg-green/10 px-3.5 py-1.5 text-[13px] font-medium text-green">
+                  本轮 focus：{overall.targeting_stats.focus_label}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {overall?.summary && (
+            <div className="text-[14px] leading-[1.8] text-text mb-4">{overall.summary}</div>
+          )}
+
+          {overall?.targeting_stats && (
+            <div className="flex flex-wrap gap-3 mb-4">
+              <Badge tone="muted">命中率 {(overall.targeting_stats.hit_rate * 100).toFixed(0)}%</Badge>
+              <Badge tone="muted">修复率 {(overall.targeting_stats.repair_rate * 100).toFixed(0)}%</Badge>
+              <Badge tone="muted">前3题命中高优先级点 {overall.targeting_stats.front3_high_priority_hits || 0} 次</Badge>
+              {overall.targeting_stats.focus_label && (
+                <Badge tone="green">focus 命中率 {((overall.targeting_stats.focus_hit_rate || 0) * 100).toFixed(0)}%</Badge>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {overall?.new_weak_points?.length > 0 && (
+              <div>
+                <div className="text-[14px] font-semibold mb-2">薄弱点</div>
+                <div className="flex flex-col gap-1.5">
+                  {overall.new_weak_points.slice(0, 4).map((wp, i) => (
+                    <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">
+                      {typeof wp === "string" ? wp : wp.point || JSON.stringify(wp)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {overall?.new_strong_points?.length > 0 && (
+              <div>
+                <div className="text-[14px] font-semibold mb-2">亮点</div>
+                <div className="flex flex-col gap-1.5">
+                  {overall.new_strong_points.slice(0, 4).map((sp, i) => (
+                    <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/8 border border-green/20">
+                      {typeof sp === "string" ? sp : sp.point || JSON.stringify(sp)}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-          {overall.targeting_stats.strategy_snapshot?.length > 0 && (
-            <div className="mb-3">
-              <div className="text-[15px] font-medium mb-2">本场重点覆盖 weak points</div>
-              <div className="flex flex-col gap-1.5">
-                {overall.targeting_stats.strategy_snapshot.map((item, idx) => {
-                  const badge = strategyBadge(item.adaptive_strategy);
-                  return (
-                    <div key={idx} className="px-3 py-2 rounded-lg text-[13px] text-text bg-hover border border-border">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span>{item.point}</span>
-                        <button
-                          onClick={() => navigate(`/profile/topic/${topic}`)}
-                          className="px-2 py-0.5 rounded text-[11px] font-medium border-none cursor-pointer"
-                          style={{ background: badge.bg, color: badge.color }}
-                        >
-                          策略 {badge.label}
-                        </button>
-                        {item.priority_score != null && <span className="text-[12px] text-dim">优先级 {item.priority_score}</span>}
-                        {item.semantic_bucket && topic && (
-                          <button
-                            onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(item.semantic_bucket) } })}
-                            className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
-                            title={item.semantic_bucket}
-                          >
-                            {bucketLabel(item.semantic_bucket)}
-                          </button>
-                        )}
-                        {topic && (
-                          <button
-                            onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
-                            className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
-                          >
-                            开始本轮训练
-                          </button>
-                        )}
-                      </div>
-                      <div className="text-[12px] leading-[1.7] text-dim">{strategyReason(item)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {overall.targeting_stats.matched_items?.length > 0 && (
-            <div>
-              <div className="text-[15px] font-medium mb-2">命中结果</div>
-              <div className="flex flex-col gap-1.5">
-                {overall.targeting_stats.matched_items.map((item, idx) => {
-                  const badge = strategyBadge(item.adaptive_strategy);
-                  return (
-                    <div key={idx} className="px-3 py-2 rounded-lg text-[13px] border border-border bg-hover">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-medium">Q{item.question_id}</span>
-                        <span>{item.weak_point}</span>
-                        <button
-                          onClick={() => navigate(`/profile/topic/${topic}`)}
-                          className="px-2 py-0.5 rounded text-[11px] font-medium border-none cursor-pointer"
-                          style={{ background: badge.bg, color: badge.color }}
-                        >
-                          策略 {badge.label}
-                        </button>
-                        {item.semantic_bucket && topic && (
-                          <button
-                            onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(item.semantic_bucket) } })}
-                            className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
-                            title={item.semantic_bucket}
-                          >
-                            {bucketLabel(item.semantic_bucket)}
-                          </button>
-                        )}
-                        {item.score_10 != null ? <span className="text-[12px] text-dim">{item.score_10}/10</span> : null}
-                        {item.focus_hit && (
-                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-green/10 text-green">
-                            命中本次 focus
-                          </span>
-                        )}
-                        <span style={{ color: item.improved ? "var(--green)" : "var(--red)" }}>
-                          {item.improved ? "本次有回升" : "仍需继续修复"}
-                        </span>
-                        {topic && (
-                          <button
-                            onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
-                            className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
-                          >
-                            开始本轮训练
-                          </button>
-                        )}
-                      </div>
-                      <div className="text-[12px] leading-[1.7] text-dim">{strategyReason(item)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Weak points */}
-      {overall?.new_weak_points?.length > 0 && (
-        <>
-          <SectionTitle className="mt-2">薄弱点</SectionTitle>
-          <div className="flex flex-col gap-1.5 mb-4">
-            {overall.new_weak_points.map((wp, i) => (
-              <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">
-                {typeof wp === "string" ? wp : wp.point || JSON.stringify(wp)}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Strong points */}
-      {overall?.new_strong_points?.length > 0 && (
-        <>
-          <SectionTitle className="mt-2">亮点</SectionTitle>
-          <div className="flex flex-col gap-1.5 mb-4">
-            {overall.new_strong_points.map((sp, i) => (
-              <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/8 border border-green/20">
-                {typeof sp === "string" ? sp : sp.point || JSON.stringify(sp)}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Per-question workspace */}
       <SectionTitle className="mt-2">逐题复盘</SectionTitle>
       {questionItems.length > 0 && activeItem && (() => {
         const { q, s, answer, isSkipped, numericScore } = activeItem;
@@ -983,298 +630,314 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
         const tb = trainingLabelBadge(q.training_label);
 
         return (
-          <>
-            <div className="mb-4 rounded-2xl border border-border bg-card/70 px-4 py-4">
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-                <div className="flex items-center gap-2 flex-wrap">
+          <div className="mb-4 rounded-[24px] border border-border bg-card/80 p-3 md:p-4">
+            <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-4">
+              <div className="rounded-2xl border border-border/70 bg-card/70 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="text-[14px] font-semibold text-text">题目导航</div>
                   <Badge tone="muted">共 {questionItems.length} 题</Badge>
-                  <Badge tone="accent">当前查看 Q{q.id}</Badge>
-                  {s.focus_hit && <Badge tone="green">命中本次 focus</Badge>}
-                  {numericScore != null && numericScore < 6 && <Badge tone="red">优先修复</Badge>}
-                  {improvedAnswers[q.id]?.improved_answer && <Badge tone="green">已有改进版答案</Badge>}
                 </div>
-                <div className="text-[12px] text-dim">默认已定位到最值得先看的题</div>
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {questionItems.map((item) => {
-                  const score = item.numericScore;
-                  const active = item.q.id === activeQuestionId;
-                  const low = score != null && score < 6;
-                  return (
-                    <button
-                      key={item.q.id}
-                      type="button"
-                      onClick={() => setActiveQuestionId(item.q.id)}
-                      className={`shrink-0 rounded-xl border px-3 py-2 text-left transition-all ${active ? "border-accent bg-accent/10" : "border-border bg-card hover:border-accent/35"}`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{item.q.id}</span>
-                        {score != null && (
-                          <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>
-                        )}
-                      </div>
-                      <div className="max-w-[140px] truncate text-[11px] text-dim">{item.isSkipped ? "未作答" : (item.s.weak_point || item.q.focus_area || item.q.question)}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-xl px-4 py-4 md:px-5 mb-4 animate-fade-in">
-              <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
-                  <span className="text-xs px-2 py-0.5 rounded" style={{ background: tb.bg, color: tb.color }} title={q.training_intent || q.training_label}>
-                    {tb.label}
-                  </span>
-                  {q.focus_area && (
-                    <button
-                      onClick={() => topic && navigate(`/profile/topic/${topic}`)}
-                      className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer"
-                    >
-                      {q.focus_area}
-                    </button>
-                  )}
+                <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
+                  {questionItems.map((item) => {
+                    const score = item.numericScore;
+                    const active = item.q.id === activeQuestionId;
+                    const low = score != null && score < 6;
+                    return (
+                      <button
+                        key={item.q.id}
+                        type="button"
+                        onClick={() => setActiveQuestionId(item.q.id)}
+                        className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${active ? "border-accent bg-accent/10 shadow-[0_0_0_1px_rgba(245,158,11,0.12)]" : "border-border bg-card hover:border-accent/30"}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className={`text-[13px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{item.q.id}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            {score != null && (
+                              <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>
+                            )}
+                            {item.s.focus_hit && <span className="text-[10px] rounded bg-green/10 px-1.5 py-0.5 text-green">focus</span>}
+                            {item.isSkipped && <span className="text-[10px] rounded bg-hover px-1.5 py-0.5 text-dim">未作答</span>}
+                          </div>
+                        </div>
+                        <div className="text-[11px] leading-[1.6] text-dim line-clamp-2">
+                          {item.isSkipped ? item.q.question : (item.s.weak_point || item.q.focus_area || item.q.question)}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-                <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
-                  {numericScore ?? "-"}/10
-                </span>
               </div>
 
-              <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
-              {q.training_intent && (
-                <div className="mb-3 text-[12px] text-dim leading-[1.7]">训练意图：{q.training_intent}</div>
-              )}
+              <div>
+                <div className="mb-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge tone="accent">当前查看 Q{q.id}</Badge>
+                      {s.focus_hit && <Badge tone="green">命中本次 focus</Badge>}
+                      {numericScore != null && numericScore < 6 && <Badge tone="red">优先修复</Badge>}
+                      {improvedAnswers[q.id]?.improved_answer && <Badge tone="green">已有改进版答案</Badge>}
+                    </div>
+                    <div className="text-[12px] text-dim">第 {activeIndex + 1} / {questionItems.length} 题</div>
+                  </div>
+                  <div className="text-[12px] leading-[1.7] text-dim">像翻书一样逐题查看；左侧目录负责跳题，右侧负责深入复盘。</div>
+                </div>
 
-              {isSkipped ? (
-                <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
-              ) : (
-                <>
-                  <div className="bg-hover rounded-lg px-3 py-3 md:px-3.5 mb-3">
-                    <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
-                    <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
+                <div className="bg-card border border-border rounded-2xl px-4 py-4 md:px-5 mb-4 animate-fade-in">
+                  <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
+                      <span className="text-xs px-2 py-0.5 rounded" style={{ background: tb.bg, color: tb.color }} title={q.training_intent || q.training_label}>
+                        {tb.label}
+                      </span>
+                      {q.focus_area && (
+                        <button
+                          onClick={() => topic && navigate(`/profile/topic/${topic}`)}
+                          className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer"
+                        >
+                          {q.focus_area}
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
+                      {numericScore ?? "-"}/10
+                    </span>
                   </div>
 
-                  {s.assessment && s.assessment !== "未作答" && (
-                    <div className="text-sm leading-[1.7] text-text mb-2">
-                      <strong className="text-xs opacity-60">点评: </strong>{s.assessment}
-                    </div>
+                  <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
+                  {q.training_intent && (
+                    <div className="mb-3 text-[12px] text-dim leading-[1.7]">训练意图：{q.training_intent}</div>
                   )}
 
-                  {s.improvement && (
-                    <div className="text-sm leading-[1.7] text-accent-light bg-accent/8 rounded-lg px-3 py-2.5 md:px-3.5 mb-2">
-                      <strong className="text-xs opacity-70">改进建议: </strong>{s.improvement}
-                    </div>
-                  )}
+                  {isSkipped ? (
+                    <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
+                  ) : (
+                    <>
+                      <div className="bg-hover rounded-lg px-3 py-3 md:px-3.5 mb-3">
+                        <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
+                        <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
+                      </div>
 
-                  {s.understanding && s.understanding !== "未作答" && (
-                    <div className="text-[13px] text-dim italic mt-1">理解程度: {s.understanding}</div>
-                  )}
-
-                  {s.key_missing?.length > 0 && (
-                    <div className="text-[13px] text-red leading-normal">遗漏关键点: {s.key_missing.join("、")}</div>
-                  )}
-
-                  {s.weak_point && (
-                    <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
-                      <span>薄弱点标签: {s.weak_point}</span>
-                      {s.semantic_bucket && topic && (
-                        <button
-                          onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })}
-                          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
-                          title={s.semantic_bucket}
-                        >
-                          {bucketLabel(s.semantic_bucket)}
-                        </button>
+                      {s.assessment && s.assessment !== "未作答" && (
+                        <div className="text-sm leading-[1.7] text-text mb-2">
+                          <strong className="text-xs opacity-60">点评: </strong>{s.assessment}
+                        </div>
                       )}
-                      {topic && (
-                        <button
-                          onClick={() => navigate(`/profile/topic/${topic}`)}
-                          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
-                        >
-                          看专题
-                        </button>
-                      )}
-                      {topic && (
-                        <button
-                          onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })}
-                          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-hover text-dim border-none cursor-pointer"
-                        >
-                          先看题库
-                        </button>
-                      )}
-                      {topic && (
-                        <button
-                          onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
-                          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
-                        >
-                          去修复
-                        </button>
-                      )}
-                    </div>
-                  )}
 
-                  <InlineAutoScoreDetail detail={s.auto_score_detail} />
+                      {s.improvement && (
+                        <div className="text-sm leading-[1.7] text-accent-light bg-accent/8 rounded-lg px-3 py-2.5 md:px-3.5 mb-2">
+                          <strong className="text-xs opacity-70">改进建议: </strong>{s.improvement}
+                        </div>
+                      )}
 
-                  {topic && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      {refAnswers[q.id]?.reference_answer ? (
-                        <div className="text-sm leading-[1.8]">
-                          <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
-                            <span className="flex items-center gap-1.5">
-                              <BookOpen size={13} /> 标准参考答案
-                            </span>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {refAnswers[q.id]?.generated_at && (
-                                <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
-                              )}
-                              <button
-                                className="text-[12px] text-dim bg-transparent border-none cursor-pointer"
-                                onClick={() => handleRefAnswer(q.id, q.question, true)}
-                                disabled={refLoading[q.id]}
-                              >
-                                {refLoading[q.id] ? "重新生成中..." : "重新生成"}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="md-content bg-hover rounded-lg px-3.5 py-3">
-                            <ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown>
-                          </div>
+                      {s.understanding && s.understanding !== "未作答" && (
+                        <div className="text-[13px] text-dim italic mt-1">理解程度: {s.understanding}</div>
+                      )}
 
-                          <div className="mt-3 flex flex-wrap gap-2">
+                      {s.key_missing?.length > 0 && (
+                        <div className="text-[13px] text-red leading-normal">遗漏关键点: {s.key_missing.join("、")}</div>
+                      )}
+
+                      {s.weak_point && (
+                        <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
+                          <span>薄弱点标签: {s.weak_point}</span>
+                          {s.semantic_bucket && topic && (
                             <button
-                              className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
-                              onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}
+                              onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })}
+                              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                              title={s.semantic_bucket}
                             >
-                              <BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}
+                              {bucketLabel(s.semantic_bucket)}
                             </button>
+                          )}
+                          {topic && (
                             <button
-                              className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50"
-                              onClick={() => handleImprovedAnswer(q.id, q.question)}
-                              disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}
+                              onClick={() => navigate(`/profile/topic/${topic}`)}
+                              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
                             >
-                              <BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}
+                              看专题
                             </button>
-                          </div>
+                          )}
+                          {topic && (
+                            <button
+                              onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })}
+                              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-hover text-dim border-none cursor-pointer"
+                            >
+                              先看题库
+                            </button>
+                          )}
+                          {topic && (
+                            <button
+                              onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
+                              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
+                            >
+                              去修复
+                            </button>
+                          )}
+                        </div>
+                      )}
 
-                          {improvedAnswers[q.id]?.improved_answer && (
-                            <div className="mt-3 rounded-lg border border-green/20 bg-green/5 px-3 py-3">
-                              <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
-                                <span>我的改进版答案</span>
-                                {improvedAnswers[q.id]?.generated_at && (
-                                  <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
-                                )}
+                      <InlineAutoScoreDetail detail={s.auto_score_detail} />
+
+                      {topic && (
+                        <div className="mt-3 pt-3 border-t border-border">
+                          {refAnswers[q.id]?.reference_answer ? (
+                            <div className="text-sm leading-[1.8]">
+                              <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
+                                <span className="flex items-center gap-1.5">
+                                  <BookOpen size={13} /> 标准参考答案
+                                </span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {refAnswers[q.id]?.generated_at && (
+                                    <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
+                                  )}
+                                  <button
+                                    className="text-[12px] text-dim bg-transparent border-none cursor-pointer"
+                                    onClick={() => handleRefAnswer(q.id, q.question, true)}
+                                    disabled={refLoading[q.id]}
+                                  >
+                                    {refLoading[q.id] ? "重新生成中..." : "重新生成"}
+                                  </button>
+                                </div>
                               </div>
-                              <div className="md-content rounded-lg bg-card px-3.5 py-3">
-                                <ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown>
+                              <div className="md-content bg-hover rounded-lg px-3.5 py-3">
+                                <ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown>
                               </div>
+
                               <div className="mt-3 flex flex-wrap gap-2">
                                 <button
-                                  className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
-                                  onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}
+                                  className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
+                                  onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}
                                 >
-                                  <BookOpen size={13} /> 带着这版再练一遍
+                                  <BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}
+                                </button>
+                                <button
+                                  className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50"
+                                  onClick={() => handleImprovedAnswer(q.id, q.question)}
+                                  disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}
+                                >
+                                  <BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}
                                 </button>
                               </div>
-                            </div>
-                          )}
 
-                          {followupOpen[q.id] && (
-                            <div className="mt-3 rounded-lg border border-border bg-hover px-3 py-3">
-                              <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
-                              <div className="flex flex-wrap gap-2 mb-2.5">
-                                {FOLLOWUP_QUICK_ACTIONS.map((item) => (
-                                  <button
-                                    key={item.label}
-                                    className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer"
-                                    onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))}
-                                    type="button"
-                                  >
-                                    {item.label}
-                                  </button>
-                                ))}
-                              </div>
-                              <textarea
-                                className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none"
-                                placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子"
-                                value={followupInput[q.id] || ""}
-                                onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))}
-                              />
-                              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                <button
-                                  className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50"
-                                  onClick={() => handleFollowup(q.id, q.question)}
-                                  disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}
-                                >
-                                  {followupLoading[q.id] ? "AI 思考中..." : "发送追问"}
-                                </button>
-                                <button
-                                  className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer"
-                                  onClick={() => {
-                                    setFollowupInput((p) => ({ ...p, [q.id]: "" }));
-                                  }}
-                                >
-                                  清空输入
-                                </button>
-                              </div>
-                              {followupHistory[q.id]?.length > 0 && (
-                                <div className="mt-3">
-                                  <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导记录</div>
-                                  <div className="flex flex-col gap-3">
-                                    {followupHistory[q.id].map((item, idx) => (
-                                      <div key={`${q.id}-${idx}`} className="rounded-lg border border-border bg-card px-3.5 py-3">
-                                        <div className="text-[12px] font-semibold text-accent-light mb-1">你追问</div>
-                                        <div className="text-sm leading-[1.7] whitespace-pre-wrap">{item.followup}</div>
-                                        <div className="text-[12px] font-semibold text-dim mt-3 mb-1">AI 回答</div>
-                                        <div className="md-content">
-                                          <ReactMarkdown>{item.answer || ""}</ReactMarkdown>
-                                        </div>
-                                        {item.created_at && (
-                                          <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>
-                                        )}
-                                      </div>
-                                    ))}
+                              {improvedAnswers[q.id]?.improved_answer && (
+                                <div className="mt-3 rounded-lg border border-green/20 bg-green/5 px-3 py-3">
+                                  <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
+                                    <span>我的改进版答案</span>
+                                    {improvedAnswers[q.id]?.generated_at && (
+                                      <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
+                                    )}
+                                  </div>
+                                  <div className="md-content rounded-lg bg-card px-3.5 py-3">
+                                    <ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                      className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
+                                      onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}
+                                    >
+                                      <BookOpen size={13} /> 带着这版再练一遍
+                                    </button>
                                   </div>
                                 </div>
                               )}
+
+                              {followupOpen[q.id] && (
+                                <div className="mt-3 rounded-lg border border-border bg-hover px-3 py-3">
+                                  <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
+                                  <div className="flex flex-wrap gap-2 mb-2.5">
+                                    {FOLLOWUP_QUICK_ACTIONS.map((item) => (
+                                      <button
+                                        key={item.label}
+                                        className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer"
+                                        onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))}
+                                        type="button"
+                                      >
+                                        {item.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <textarea
+                                    className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none"
+                                    placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子"
+                                    value={followupInput[q.id] || ""}
+                                    onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))}
+                                  />
+                                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                    <button
+                                      className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50"
+                                      onClick={() => handleFollowup(q.id, q.question)}
+                                      disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}
+                                    >
+                                      {followupLoading[q.id] ? "AI 思考中..." : "发送追问"}
+                                    </button>
+                                    <button
+                                      className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer"
+                                      onClick={() => {
+                                        setFollowupInput((p) => ({ ...p, [q.id]: "" }));
+                                      }}
+                                    >
+                                      清空输入
+                                    </button>
+                                  </div>
+                                  {followupHistory[q.id]?.length > 0 && (
+                                    <div className="mt-3">
+                                      <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导记录</div>
+                                      <div className="flex flex-col gap-3">
+                                        {followupHistory[q.id].map((item, idx) => (
+                                          <div key={`${q.id}-${idx}`} className="rounded-lg border border-border bg-card px-3.5 py-3">
+                                            <div className="text-[12px] font-semibold text-accent-light mb-1">你追问</div>
+                                            <div className="text-sm leading-[1.7] whitespace-pre-wrap">{item.followup}</div>
+                                            <div className="text-[12px] font-semibold text-dim mt-3 mb-1">AI 回答</div>
+                                            <div className="md-content">
+                                              <ReactMarkdown>{item.answer || ""}</ReactMarkdown>
+                                            </div>
+                                            {item.created_at && (
+                                              <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
+                          ) : (
+                            <button
+                              className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50"
+                              onClick={() => handleRefAnswer(q.id, q.question)}
+                              disabled={refLoading[q.id]}
+                            >
+                              <BookOpen size={13} />
+                              {refLoading[q.id] ? "正在生成参考答案..." : "查看标准参考答案"}
+                            </button>
                           )}
                         </div>
-                      ) : (
-                        <button
-                          className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50"
-                          onClick={() => handleRefAnswer(q.id, q.question)}
-                          disabled={refLoading[q.id]}
-                        >
-                          <BookOpen size={13} />
-                          {refLoading[q.id] ? "正在生成参考答案..." : "查看标准参考答案"}
-                        </button>
                       )}
-                    </div>
+                    </>
                   )}
-                </>
-              )}
-            </div>
+                </div>
 
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <OutlineButton
-                onClick={() => activeIndex > 0 && setActiveQuestionId(questionItems[activeIndex - 1].q.id)}
-                disabled={activeIndex <= 0}
-                className="px-3 py-2 text-[12px] disabled:opacity-40"
-              >
-                上一题
-              </OutlineButton>
-              <div className="text-[12px] text-dim">第 {activeIndex + 1} / {questionItems.length} 题</div>
-              <OutlineButton
-                onClick={() => activeIndex < questionItems.length - 1 && setActiveQuestionId(questionItems[activeIndex + 1].q.id)}
-                disabled={activeIndex >= questionItems.length - 1}
-                className="px-3 py-2 text-[12px] disabled:opacity-40"
-              >
-                下一题
-              </OutlineButton>
+                <div className="flex items-center justify-between gap-3">
+                  <OutlineButton
+                    onClick={() => activeIndex > 0 && setActiveQuestionId(questionItems[activeIndex - 1].q.id)}
+                    disabled={activeIndex <= 0}
+                    className="px-3 py-2 text-[12px] disabled:opacity-40"
+                  >
+                    上一题
+                  </OutlineButton>
+                  <div className="text-[12px] text-dim">第 {activeIndex + 1} / {questionItems.length} 题</div>
+                  <OutlineButton
+                    onClick={() => activeIndex < questionItems.length - 1 && setActiveQuestionId(questionItems[activeIndex + 1].q.id)}
+                    disabled={activeIndex >= questionItems.length - 1}
+                    className="px-3 py-2 text-[12px] disabled:opacity-40"
+                  >
+                    下一题
+                  </OutlineButton>
+                </div>
+              </div>
             </div>
-          </>
+          </div>
         );
       })()}
     </>
