@@ -1,7 +1,7 @@
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { PageTitle, SectionTitle, SubtleButton } from "../components/ui.jsx";
+import { PageTitle, SectionTitle, SubtleButton, Badge, OutlineButton } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
 import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview, getHistory } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
@@ -614,6 +614,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
 }
 
 function DrillReview({ sessionId, scores, overall, questions, answers, topic, topics, persistedReferenceAnswers = {}, persistedReferenceFollowups = {}, persistedImprovedAnswers = {} }) {
+  const navigate = useNavigate();
   const answerMap = {};
   for (const a of (answers || [])) answerMap[a.question_id] = a.answer;
   const scoreMap = {};
@@ -647,6 +648,36 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
     });
     return seeded;
   });
+
+  const questionItems = (questions || []).map((q) => {
+    const s = scoreMap[q.id] || {};
+    const answer = answerMap[q.id];
+    const isSkipped = !answer;
+    const numericScore = typeof s.score === "number" ? s.score : null;
+    const priority = [
+      isSkipped ? 0 : 1,
+      s.focus_hit ? 3 : 0,
+      numericScore != null ? Math.max(0, 10 - numericScore) : 0,
+      s.key_missing?.length || 0,
+      s.improved ? 0 : 0.5,
+    ].reduce((a, b) => a + b, 0);
+    return { q, s, answer, isSkipped, numericScore, priority };
+  });
+
+  const defaultQuestionId = questionItems.length
+    ? [...questionItems].sort((a, b) => b.priority - a.priority)[0]?.q?.id
+    : null;
+  const [activeQuestionId, setActiveQuestionId] = useState(defaultQuestionId);
+
+  useEffect(() => {
+    if (!questionItems.length) return;
+    if (!activeQuestionId || !questionItems.some((item) => item.q.id === activeQuestionId)) {
+      setActiveQuestionId(defaultQuestionId || questionItems[0]?.q?.id || null);
+    }
+  }, [questions, scores]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeIndex = questionItems.findIndex((item) => item.q.id === activeQuestionId);
+  const activeItem = activeIndex >= 0 ? questionItems[activeIndex] : questionItems[0] || null;
 
   const handleRefAnswer = async (qId, questionText, forceRegenerate = false) => {
     if (refAnswers[qId]?.reference_answer && !forceRegenerate) return;
@@ -944,264 +975,308 @@ function DrillReview({ sessionId, scores, overall, questions, answers, topic, to
         </>
       )}
 
-      {/* Per-question cards */}
+      {/* Per-question workspace */}
       <SectionTitle className="mt-2">逐题复盘</SectionTitle>
-      {(questions || []).map((q) => {
-        const s = scoreMap[q.id] || {};
-        const answer = answerMap[q.id];
-        const isSkipped = !answer;
-        const score = s.score;
-        const sc = typeof score === "number" ? getScoreColor(score) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
-
-        if (isSkipped) {
-          return (
-            <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-3 md:px-5 mb-4 opacity-50 flex items-center justify-between animate-fade-in">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
-                <span className="text-sm text-dim">{q.question.slice(0, 50)}{q.question.length > 50 ? "..." : ""}</span>
-              </div>
-              <span className="text-[13px] text-dim">未作答</span>
-            </div>
-          );
-        }
+      {questionItems.length > 0 && activeItem && (() => {
+        const { q, s, answer, isSkipped, numericScore } = activeItem;
+        const sc = numericScore != null ? getScoreColor(numericScore) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
+        const tb = trainingLabelBadge(q.training_label);
 
         return (
-          <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-4 md:px-5 mb-4 animate-fade-in">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
-                {(() => {
-                  const tb = trainingLabelBadge(q.training_label);
+          <>
+            <div className="mb-4 rounded-2xl border border-border bg-card/70 px-4 py-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge tone="muted">共 {questionItems.length} 题</Badge>
+                  <Badge tone="accent">当前查看 Q{q.id}</Badge>
+                  {s.focus_hit && <Badge tone="green">命中本次 focus</Badge>}
+                  {numericScore != null && numericScore < 6 && <Badge tone="red">优先修复</Badge>}
+                  {improvedAnswers[q.id]?.improved_answer && <Badge tone="green">已有改进版答案</Badge>}
+                </div>
+                <div className="text-[12px] text-dim">默认已定位到最值得先看的题</div>
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {questionItems.map((item) => {
+                  const score = item.numericScore;
+                  const active = item.q.id === activeQuestionId;
+                  const low = score != null && score < 6;
                   return (
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: tb.bg, color: tb.color }} title={q.training_intent || q.training_label}>
-                      {tb.label}
-                    </span>
-                  );
-                })()}
-                {q.focus_area && (
-                  <button
-                    onClick={() => topic && navigate(`/profile/topic/${topic}`)}
-                    className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer"
-                  >
-                    {q.focus_area}
-                  </button>
-                )}
-              </div>
-              <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
-                {score ?? "-"}/10
-              </span>
-            </div>
-
-            <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
-            {q.training_intent && (
-              <div className="mb-3 text-[12px] text-dim leading-[1.7]">训练意图：{q.training_intent}</div>
-            )}
-
-            <div className="bg-hover rounded-lg px-3 py-3 md:px-3.5 mb-3">
-              <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
-              <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
-            </div>
-
-            {s.assessment && s.assessment !== "未作答" && (
-              <div className="text-sm leading-[1.7] text-text mb-2">
-                <strong className="text-xs opacity-60">点评: </strong>{s.assessment}
-              </div>
-            )}
-
-            {s.improvement && (
-              <div className="text-sm leading-[1.7] text-accent-light bg-accent/8 rounded-lg px-3 py-2.5 md:px-3.5 mb-2">
-                <strong className="text-xs opacity-70">改进建议: </strong>{s.improvement}
-              </div>
-            )}
-
-            {s.understanding && s.understanding !== "未作答" && (
-              <div className="text-[13px] text-dim italic mt-1">理解程度: {s.understanding}</div>
-            )}
-
-            {s.key_missing?.length > 0 && (
-              <div className="text-[13px] text-red leading-normal">遗漏关键点: {s.key_missing.join("、")}</div>
-            )}
-
-            {s.weak_point && (
-              <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
-                <span>薄弱点标签: {s.weak_point}</span>
-                {s.semantic_bucket && topic && (
-                  <button
-                    onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })}
-                    className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
-                    title={s.semantic_bucket}
-                  >
-                    {bucketLabel(s.semantic_bucket)}
-                  </button>
-                )}
-                {topic && (
-                  <button
-                    onClick={() => navigate(`/profile/topic/${topic}`)}
-                    className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
-                  >
-                    看专题
-                  </button>
-                )}
-                {topic && (
-                  <button
-                    onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })}
-                    className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-hover text-dim border-none cursor-pointer"
-                  >
-                    先看题库
-                  </button>
-                )}
-                {topic && (
-                  <button
-                    onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
-                    className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
-                  >
-                    去修复
-                  </button>
-                )}
-              </div>
-            )}
-
-            <InlineAutoScoreDetail detail={s.auto_score_detail} />
-
-            {topic && (
-              <div className="mt-3 pt-3 border-t border-border">
-                {refAnswers[q.id]?.reference_answer ? (
-                  <div className="text-sm leading-[1.8]">
-                    <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
-                      <span className="flex items-center gap-1.5">
-                        <BookOpen size={13} /> 标准参考答案
-                      </span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {refAnswers[q.id]?.generated_at && (
-                          <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
+                    <button
+                      key={item.q.id}
+                      type="button"
+                      onClick={() => setActiveQuestionId(item.q.id)}
+                      className={`shrink-0 rounded-xl border px-3 py-2 text-left transition-all ${active ? "border-accent bg-accent/10" : "border-border bg-card hover:border-accent/35"}`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{item.q.id}</span>
+                        {score != null && (
+                          <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>
                         )}
+                      </div>
+                      <div className="max-w-[140px] truncate text-[11px] text-dim">{item.isSkipped ? "未作答" : (item.s.weak_point || item.q.focus_area || item.q.question)}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-card border border-border rounded-xl px-4 py-4 md:px-5 mb-4 animate-fade-in">
+              <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
+                  <span className="text-xs px-2 py-0.5 rounded" style={{ background: tb.bg, color: tb.color }} title={q.training_intent || q.training_label}>
+                    {tb.label}
+                  </span>
+                  {q.focus_area && (
+                    <button
+                      onClick={() => topic && navigate(`/profile/topic/${topic}`)}
+                      className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer"
+                    >
+                      {q.focus_area}
+                    </button>
+                  )}
+                </div>
+                <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
+                  {numericScore ?? "-"}/10
+                </span>
+              </div>
+
+              <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
+              {q.training_intent && (
+                <div className="mb-3 text-[12px] text-dim leading-[1.7]">训练意图：{q.training_intent}</div>
+              )}
+
+              {isSkipped ? (
+                <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
+              ) : (
+                <>
+                  <div className="bg-hover rounded-lg px-3 py-3 md:px-3.5 mb-3">
+                    <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
+                  </div>
+
+                  {s.assessment && s.assessment !== "未作答" && (
+                    <div className="text-sm leading-[1.7] text-text mb-2">
+                      <strong className="text-xs opacity-60">点评: </strong>{s.assessment}
+                    </div>
+                  )}
+
+                  {s.improvement && (
+                    <div className="text-sm leading-[1.7] text-accent-light bg-accent/8 rounded-lg px-3 py-2.5 md:px-3.5 mb-2">
+                      <strong className="text-xs opacity-70">改进建议: </strong>{s.improvement}
+                    </div>
+                  )}
+
+                  {s.understanding && s.understanding !== "未作答" && (
+                    <div className="text-[13px] text-dim italic mt-1">理解程度: {s.understanding}</div>
+                  )}
+
+                  {s.key_missing?.length > 0 && (
+                    <div className="text-[13px] text-red leading-normal">遗漏关键点: {s.key_missing.join("、")}</div>
+                  )}
+
+                  {s.weak_point && (
+                    <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
+                      <span>薄弱点标签: {s.weak_point}</span>
+                      {s.semantic_bucket && topic && (
                         <button
-                          className="text-[12px] text-dim bg-transparent border-none cursor-pointer"
-                          onClick={() => handleRefAnswer(q.id, q.question, true)}
-                          disabled={refLoading[q.id]}
+                          onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })}
+                          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                          title={s.semantic_bucket}
                         >
-                          {refLoading[q.id] ? "重新生成中..." : "重新生成"}
+                          {bucketLabel(s.semantic_bucket)}
                         </button>
-                      </div>
+                      )}
+                      {topic && (
+                        <button
+                          onClick={() => navigate(`/profile/topic/${topic}`)}
+                          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
+                        >
+                          看专题
+                        </button>
+                      )}
+                      {topic && (
+                        <button
+                          onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })}
+                          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-hover text-dim border-none cursor-pointer"
+                        >
+                          先看题库
+                        </button>
+                      )}
+                      {topic && (
+                        <button
+                          onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
+                          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
+                        >
+                          去修复
+                        </button>
+                      )}
                     </div>
-                    <div className="md-content bg-hover rounded-lg px-3.5 py-3">
-                      <ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown>
-                    </div>
+                  )}
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
-                        onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}
-                      >
-                        <BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}
-                      </button>
-                      <button
-                        className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50"
-                        onClick={() => handleImprovedAnswer(q.id, q.question)}
-                        disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}
-                      >
-                        <BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}
-                      </button>
-                    </div>
+                  <InlineAutoScoreDetail detail={s.auto_score_detail} />
 
-                    {improvedAnswers[q.id]?.improved_answer && (
-                      <div className="mt-3 rounded-lg border border-green/20 bg-green/5 px-3 py-3">
-                        <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
-                          <span>我的改进版答案</span>
-                          {improvedAnswers[q.id]?.generated_at && (
-                            <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
-                          )}
-                        </div>
-                        <div className="md-content rounded-lg bg-card px-3.5 py-3">
-                          <ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
-                            onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}
-                          >
-                            <BookOpen size={13} /> 带着这版再练一遍
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {followupOpen[q.id] && (
-                      <div className="mt-3 rounded-lg border border-border bg-hover px-3 py-3">
-                        <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
-                        <div className="flex flex-wrap gap-2 mb-2.5">
-                          {FOLLOWUP_QUICK_ACTIONS.map((item) => (
-                            <button
-                              key={item.label}
-                              className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer"
-                              onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))}
-                              type="button"
-                            >
-                              {item.label}
-                            </button>
-                          ))}
-                        </div>
-                        <textarea
-                          className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none"
-                          placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子"
-                          value={followupInput[q.id] || ""}
-                          onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))}
-                        />
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <button
-                            className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50"
-                            onClick={() => handleFollowup(q.id, q.question)}
-                            disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}
-                          >
-                            {followupLoading[q.id] ? "AI 思考中..." : "发送追问"}
-                          </button>
-                          <button
-                            className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer"
-                            onClick={() => {
-                              setFollowupInput((p) => ({ ...p, [q.id]: "" }));
-                            }}
-                          >
-                            清空输入
-                          </button>
-                        </div>
-                        {followupHistory[q.id]?.length > 0 && (
-                          <div className="mt-3">
-                            <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导记录</div>
-                            <div className="flex flex-col gap-3">
-                              {followupHistory[q.id].map((item, idx) => (
-                                <div key={`${q.id}-${idx}`} className="rounded-lg border border-border bg-card px-3.5 py-3">
-                                  <div className="text-[12px] font-semibold text-accent-light mb-1">你追问</div>
-                                  <div className="text-sm leading-[1.7] whitespace-pre-wrap">{item.followup}</div>
-                                  <div className="text-[12px] font-semibold text-dim mt-3 mb-1">AI 回答</div>
-                                  <div className="md-content">
-                                    <ReactMarkdown>{item.answer || ""}</ReactMarkdown>
-                                  </div>
-                                  {item.created_at && (
-                                    <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>
-                                  )}
-                                </div>
-                              ))}
+                  {topic && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      {refAnswers[q.id]?.reference_answer ? (
+                        <div className="text-sm leading-[1.8]">
+                          <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
+                            <span className="flex items-center gap-1.5">
+                              <BookOpen size={13} /> 标准参考答案
+                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {refAnswers[q.id]?.generated_at && (
+                                <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
+                              )}
+                              <button
+                                className="text-[12px] text-dim bg-transparent border-none cursor-pointer"
+                                onClick={() => handleRefAnswer(q.id, q.question, true)}
+                                disabled={refLoading[q.id]}
+                              >
+                                {refLoading[q.id] ? "重新生成中..." : "重新生成"}
+                              </button>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50"
-                    onClick={() => handleRefAnswer(q.id, q.question)}
-                    disabled={refLoading[q.id]}
-                  >
-                    <BookOpen size={13} />
-                    {refLoading[q.id] ? "正在生成参考答案..." : "查看标准参考答案"}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+                          <div className="md-content bg-hover rounded-lg px-3.5 py-3">
+                            <ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
+                              onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}
+                            >
+                              <BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}
+                            </button>
+                            <button
+                              className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50"
+                              onClick={() => handleImprovedAnswer(q.id, q.question)}
+                              disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}
+                            >
+                              <BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}
+                            </button>
+                          </div>
+
+                          {improvedAnswers[q.id]?.improved_answer && (
+                            <div className="mt-3 rounded-lg border border-green/20 bg-green/5 px-3 py-3">
+                              <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
+                                <span>我的改进版答案</span>
+                                {improvedAnswers[q.id]?.generated_at && (
+                                  <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
+                                )}
+                              </div>
+                              <div className="md-content rounded-lg bg-card px-3.5 py-3">
+                                <ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
+                                  onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}
+                                >
+                                  <BookOpen size={13} /> 带着这版再练一遍
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {followupOpen[q.id] && (
+                            <div className="mt-3 rounded-lg border border-border bg-hover px-3 py-3">
+                              <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
+                              <div className="flex flex-wrap gap-2 mb-2.5">
+                                {FOLLOWUP_QUICK_ACTIONS.map((item) => (
+                                  <button
+                                    key={item.label}
+                                    className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer"
+                                    onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))}
+                                    type="button"
+                                  >
+                                    {item.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <textarea
+                                className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none"
+                                placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子"
+                                value={followupInput[q.id] || ""}
+                                onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))}
+                              />
+                              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                <button
+                                  className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50"
+                                  onClick={() => handleFollowup(q.id, q.question)}
+                                  disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}
+                                >
+                                  {followupLoading[q.id] ? "AI 思考中..." : "发送追问"}
+                                </button>
+                                <button
+                                  className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer"
+                                  onClick={() => {
+                                    setFollowupInput((p) => ({ ...p, [q.id]: "" }));
+                                  }}
+                                >
+                                  清空输入
+                                </button>
+                              </div>
+                              {followupHistory[q.id]?.length > 0 && (
+                                <div className="mt-3">
+                                  <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导记录</div>
+                                  <div className="flex flex-col gap-3">
+                                    {followupHistory[q.id].map((item, idx) => (
+                                      <div key={`${q.id}-${idx}`} className="rounded-lg border border-border bg-card px-3.5 py-3">
+                                        <div className="text-[12px] font-semibold text-accent-light mb-1">你追问</div>
+                                        <div className="text-sm leading-[1.7] whitespace-pre-wrap">{item.followup}</div>
+                                        <div className="text-[12px] font-semibold text-dim mt-3 mb-1">AI 回答</div>
+                                        <div className="md-content">
+                                          <ReactMarkdown>{item.answer || ""}</ReactMarkdown>
+                                        </div>
+                                        {item.created_at && (
+                                          <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50"
+                          onClick={() => handleRefAnswer(q.id, q.question)}
+                          disabled={refLoading[q.id]}
+                        >
+                          <BookOpen size={13} />
+                          {refLoading[q.id] ? "正在生成参考答案..." : "查看标准参考答案"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <OutlineButton
+                onClick={() => activeIndex > 0 && setActiveQuestionId(questionItems[activeIndex - 1].q.id)}
+                disabled={activeIndex <= 0}
+                className="px-3 py-2 text-[12px] disabled:opacity-40"
+              >
+                上一题
+              </OutlineButton>
+              <div className="text-[12px] text-dim">第 {activeIndex + 1} / {questionItems.length} 题</div>
+              <OutlineButton
+                onClick={() => activeIndex < questionItems.length - 1 && setActiveQuestionId(questionItems[activeIndex + 1].q.id)}
+                disabled={activeIndex >= questionItems.length - 1}
+                className="px-3 py-2 text-[12px] disabled:opacity-40"
+              >
+                下一题
+              </OutlineButton>
+            </div>
+          </>
         );
-      })}
+      })()}
     </>
   );
 }
