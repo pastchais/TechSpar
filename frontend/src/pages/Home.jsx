@@ -499,10 +499,15 @@ export default function Home() {
               </button>
             )}
           </div>
-          <div className="mb-3 flex flex-wrap gap-2">
-            <Badge tone="muted">按当前薄弱程度排序</Badge>
-            {recommendedTopicKey && <Badge tone="orange">橙色表示当前建议优先</Badge>}
-            <Badge tone="green">绿色表示当前已选中</Badge>
+          <div className="mb-3 rounded-2xl border border-border/70 bg-card/70 px-3 py-3 backdrop-blur-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="muted">按当前薄弱程度排序</Badge>
+              {recommendedTopicKey && <Badge tone="orange">橙色表示当前建议优先</Badge>}
+              <Badge tone="green">绿色表示当前已选中</Badge>
+            </div>
+            <div className="mt-2 text-[11px] leading-[1.7] text-dim">
+              先快速扫一遍优先级与当前分数，再决定是否沿推荐切入点开始训练。
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 mb-4">
             {rankedTopics.map(([key, info], idx) => {
