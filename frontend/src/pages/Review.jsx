@@ -712,6 +712,7 @@ function DrillReview({
   });
   const [showSummary, setShowSummary] = useState(true);
   const [openedQuestionState, setOpenedQuestionState] = useState({});
+  const [showMobileQuestionList, setShowMobileQuestionList] = useState(false);
 
   const questionItems = (questions || []).map((q) => {
     const s = scoreMap[q.id] || {};
@@ -746,6 +747,22 @@ function DrillReview({
   const activeIndex = questionItems.findIndex((item) => item.q.id === activeQuestionId);
   const activeItem = activeIndex >= 0 ? questionItems[activeIndex] : questionItems[0] || null;
   const avgScore = overall?.avg_score || (scores?.length ? (scores.reduce((sum, item) => sum + (item.score || 0), 0) / scores.length).toFixed(1) : "-");
+
+  const goToQuestion = (questionId) => {
+    setActiveQuestionId(questionId);
+    setShowMobileQuestionList(false);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const goPrevQuestion = () => {
+    if (activeIndex > 0) goToQuestion(questionItems[activeIndex - 1].q.id);
+  };
+
+  const goNextQuestion = () => {
+    if (activeIndex < questionItems.length - 1) goToQuestion(questionItems[activeIndex + 1].q.id);
+  };
 
   const handleRefAnswer = async (questionId, question, regenerate = false) => {
     try {
@@ -942,18 +959,13 @@ function DrillReview({
                   </div>
                 </div>
 
-                <div className="lg:hidden -mx-1 overflow-x-auto pb-1">
-                  <div className="flex gap-2 px-1 min-w-max">
-                    {questionItems.map((item, idx) => (
-                      <QuestionListItemCard
-                        key={item.q.id}
-                        item={item}
-                        index={idx}
-                        active={item.q.id === activeQuestionId}
-                        mobile
-                        onClick={() => setActiveQuestionId(item.q.id)}
-                      />
-                    ))}
+                <div className="lg:hidden rounded-2xl border border-border/70 bg-hover px-3 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[13px] font-semibold text-text">当前第 {activeIndex + 1} / {questionItems.length} 题</div>
+                      <div className="mt-1 text-[12px] text-dim">长答案阅读时可随时打开题目列表切换。</div>
+                    </div>
+                    <SubtleButton onClick={() => setShowMobileQuestionList(true)} className="px-3 py-2 text-[12px]">题目列表</SubtleButton>
                   </div>
                 </div>
 
@@ -964,13 +976,13 @@ function DrillReview({
                       item={item}
                       index={idx}
                       active={item.q.id === activeQuestionId}
-                      onClick={() => setActiveQuestionId(item.q.id)}
+                      onClick={() => goToQuestion(item.q.id)}
                     />
                   ))}
                 </div>
               </SurfaceCard>
 
-              <div className="space-y-3 self-start">
+              <div className="space-y-3 self-start pb-24 lg:pb-0 pt-16 lg:pt-0">
                 <QuestionHeaderPanel
                   question={q}
                   topic={topic}
@@ -1113,11 +1125,61 @@ function DrillReview({
                   )}
                 </SurfaceCard>
 
-                <div className="flex items-center justify-between gap-3">
-                  <OutlineButton onClick={() => activeIndex > 0 && setActiveQuestionId(questionItems[activeIndex - 1].q.id)} disabled={activeIndex <= 0} className="px-3 py-2 text-[12px] disabled:opacity-40">上一题</OutlineButton>
+                <div className="hidden lg:flex items-center justify-between gap-3">
+                  <OutlineButton onClick={goPrevQuestion} disabled={activeIndex <= 0} className="px-3 py-2 text-[12px] disabled:opacity-40">上一题</OutlineButton>
                   <div className="text-[12px] text-dim">第 {activeIndex + 1} / {questionItems.length} 题</div>
-                  <OutlineButton onClick={() => activeIndex < questionItems.length - 1 && setActiveQuestionId(questionItems[activeIndex + 1].q.id)} disabled={activeIndex >= questionItems.length - 1} className="px-3 py-2 text-[12px] disabled:opacity-40">下一题</OutlineButton>
+                  <OutlineButton onClick={goNextQuestion} disabled={activeIndex >= questionItems.length - 1} className="px-3 py-2 text-[12px] disabled:opacity-40">下一题</OutlineButton>
                 </div>
+
+                <div className="lg:hidden fixed inset-x-0 top-[72px] z-20 px-3">
+                  <div className="mx-auto max-w-[720px] rounded-2xl border border-border/80 bg-card/92 px-3.5 py-2.5 backdrop-blur">
+                    <div className="flex items-center justify-between gap-3">
+                      <button type="button" className="min-w-0 flex-1 text-left bg-transparent border-none cursor-pointer" onClick={() => setShowMobileQuestionList(true)}>
+                        <div className="text-[12px] font-semibold text-text">第 {activeIndex + 1} / {questionItems.length} 题</div>
+                        <div className="mt-0.5 text-[11px] text-dim truncate">{q.question}</div>
+                      </button>
+                      <SubtleButton onClick={() => setShowMobileQuestionList(true)} className="px-3 py-2 text-[12px] shrink-0">题目列表</SubtleButton>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lg:hidden fixed inset-x-0 bottom-0 z-20 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+                  <div className="mx-auto max-w-[720px] rounded-2xl border border-border/80 bg-card/95 px-3 py-3 backdrop-blur">
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                      <OutlineButton onClick={goPrevQuestion} disabled={activeIndex <= 0} className="justify-center px-3 py-2 text-[12px] disabled:opacity-40">上一题</OutlineButton>
+                      <div className="text-[11px] text-dim text-center whitespace-nowrap">{activeIndex + 1} / {questionItems.length}</div>
+                      <OutlineButton onClick={goNextQuestion} disabled={activeIndex >= questionItems.length - 1} className="justify-center px-3 py-2 text-[12px] disabled:opacity-40">下一题</OutlineButton>
+                    </div>
+                  </div>
+                </div>
+
+                {showMobileQuestionList && (
+                  <div className="lg:hidden fixed inset-0 z-30">
+                    <button type="button" aria-label="关闭题目列表" className="absolute inset-0 bg-black/55 border-none cursor-pointer" onClick={() => setShowMobileQuestionList(false)} />
+                    <div className="absolute inset-x-0 bottom-0 max-h-[78vh] rounded-t-[28px] border border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 shadow-[0_-24px_64px_rgba(0,0,0,0.35)]">
+                      <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-border" />
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[15px] font-semibold text-text">题目列表</div>
+                          <div className="mt-1 text-[12px] text-dim">选择要跳转的题目，当前题会高亮显示。</div>
+                        </div>
+                        <SubtleButton onClick={() => setShowMobileQuestionList(false)} className="px-3 py-2 text-[12px]">关闭</SubtleButton>
+                      </div>
+                      <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+                        {questionItems.map((item, idx) => (
+                          <QuestionListItemCard
+                            key={item.q.id}
+                            item={item}
+                            index={idx}
+                            active={item.q.id === activeQuestionId}
+                            mobile
+                            onClick={() => goToQuestion(item.q.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
