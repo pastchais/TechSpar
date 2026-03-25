@@ -1,7 +1,7 @@
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { AppSection, InsightCard, PageTitle, SectionTitle, SubtleButton, Badge, OutlineButton, PanelHeader, PrimaryButton, SurfaceCard } from "../components/ui.jsx";
+import { AppSection, CalloutCard, ExpandableReviewSection, InsightCard, InsightList, ObservationColumn, PageTitle, ScoreRows, SectionTitle, SubtleButton, Badge, OutlineButton, PanelHeader, PrimaryButton, SurfaceCard } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
 import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview, getHistory, getAnalysisStatus } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
@@ -118,7 +118,13 @@ function InlineAutoScoreDetail({ detail }) {
 
 function DimensionScores({ dimensionScores, avgScore }) {
   if (!dimensionScores) return null;
-  const entries = Object.entries(DIMENSION_LABELS).filter(([k]) => dimensionScores[k] != null);
+  const entries = Object.entries(DIMENSION_LABELS)
+    .filter(([k]) => dimensionScores[k] != null)
+    .map(([key, label]) => {
+      const score = dimensionScores[key];
+      const color = score >= 8 ? "var(--green)" : score >= 6 ? "var(--accent-light)" : score >= 4 ? "#e2b93b" : "var(--red)";
+      return { key, label, value: score, percent: score * 10, color };
+    });
   if (!entries.length) return null;
 
   return (
@@ -127,67 +133,31 @@ function DimensionScores({ dimensionScores, avgScore }) {
         title="维度评分"
         action={avgScore != null ? <span className="text-sm font-normal text-dim">综合 {avgScore}/10</span> : null}
       />
-      {entries.map(([key, label]) => {
-        const score = dimensionScores[key];
-        const color = score >= 8 ? "var(--green)" : score >= 6 ? "var(--accent-light)" : score >= 4 ? "#e2b93b" : "var(--red)";
-        return (
-          <div key={key} className="flex items-center gap-2.5 mb-2.5">
-            <div className="w-[64px] md:w-[100px] text-[12px] md:text-[13px] text-dim text-right shrink-0 leading-4">{label}</div>
-            <div className="flex-1 h-2 rounded bg-border overflow-hidden">
-              <div className="h-full rounded transition-[width] duration-500 ease-in-out" style={{ width: `${score * 10}%`, background: color }} />
-            </div>
-            <div className="w-9 text-sm font-semibold text-right shrink-0" style={{ color }}>{score}</div>
-          </div>
-        );
-      })}
+      <ScoreRows items={entries} labelWidth="w-[64px] md:w-[100px]" />
     </SurfaceCard>
   );
 }
 
 function AutoScoreCard({ autoScore }) {
   if (!autoScore || !Object.keys(autoScore).length) return null;
-  const entries = Object.entries(AUTO_SCORE_LABELS).filter(([k]) => autoScore[k] != null);
+  const entries = Object.entries(AUTO_SCORE_LABELS)
+    .filter(([k]) => autoScore[k] != null)
+    .map(([key, label]) => {
+      const score = autoScore[key];
+      const percent = (score / 5) * 100;
+      const color = score >= 4 ? "var(--green)" : score >= 3 ? "var(--accent-light)" : "var(--red)";
+      return { key, label, value: score, percent, color };
+    });
   return (
     <SurfaceCard className="px-5 py-6 md:px-6 md:py-6 mb-6">
       <PanelHeader
         title="自动评分"
         action={<div className="text-sm text-dim">总分 {autoScore.total_score ?? "-"}/25 · {autoScore.summary || ""}</div>}
       />
-      {entries.map(([key, label]) => {
-        const score = autoScore[key];
-        const percent = (score / 5) * 100;
-        const color = score >= 4 ? "var(--green)" : score >= 3 ? "var(--accent-light)" : "var(--red)";
-        return (
-          <div key={key} className="flex items-center gap-2.5 mb-2.5">
-            <div className="w-[72px] md:w-[110px] text-[12px] md:text-[13px] text-dim text-right shrink-0 leading-4">{label}</div>
-            <div className="flex-1 h-2 rounded bg-border overflow-hidden">
-              <div className="h-full rounded transition-[width] duration-500 ease-in-out" style={{ width: `${percent}%`, background: color }} />
-            </div>
-            <div className="w-10 text-sm font-semibold text-right shrink-0" style={{ color }}>{score}</div>
-          </div>
-        );
-      })}
+      <ScoreRows items={entries} labelWidth="w-[72px] md:w-[110px]" />
       {autoScore.reason && <div className="mt-4 text-sm text-text leading-[1.8]">{autoScore.reason}</div>}
-      {autoScore.missing_points?.length > 0 && (
-        <div className="mt-4">
-          <div className="text-[15px] font-medium mb-2">漏掉的关键点</div>
-          <div className="flex flex-col gap-1.5">
-            {autoScore.missing_points.map((item, idx) => (
-              <div key={idx} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">{item}</div>
-            ))}
-          </div>
-        </div>
-      )}
-      {autoScore.improvements?.length > 0 && (
-        <div className="mt-4">
-          <div className="text-[15px] font-medium mb-2">改进建议</div>
-          <div className="flex flex-col gap-1.5">
-            {autoScore.improvements.map((item, idx) => (
-              <div key={idx} className="px-3 py-2 rounded-lg text-[13px] text-text bg-accent/8 border border-accent/20">{item}</div>
-            ))}
-          </div>
-        </div>
-      )}
+      <InsightList className="mt-4" title="漏掉的关键点" items={autoScore.missing_points || []} tone="red" />
+      <InsightList className="mt-4" title="改进建议" items={autoScore.improvements || []} tone="accent" />
       {autoScore.entered_mistake_book && (
         <div className="mt-4 text-[13px] text-red">该复盘分数较低，已自动写入错题本。</div>
       )}
@@ -226,15 +196,142 @@ function PracticeComparisonCard({ comparison }) {
       ) : null}
     >
       {comparison.headline && <div className="text-[15px] leading-[1.8] text-text mb-3">{comparison.headline}</div>}
-      {comparison.bullets?.length > 0 && (
-        <div className="flex flex-col gap-1.5 mb-3">
-          {comparison.bullets.map((item, idx) => (
-            <div key={idx} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/6 border border-green/15">{item}</div>
-          ))}
-        </div>
-      )}
+      <InsightList className="mb-3" items={comparison.bullets || []} tone="green" />
       {comparison.verdict && <div className="text-[13px] text-dim">结论：{comparison.verdict}</div>}
     </InsightCard>
+  );
+}
+
+function QuestionSummaryStrip({
+  questionId,
+  index,
+  total,
+  numericScore,
+  focusHit,
+  hasImproved,
+  isSkipped,
+  guidance,
+}) {
+  const sc = numericScore != null ? getScoreColor(numericScore) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
+
+  return (
+    <SurfaceCard className="mb-3 px-4 py-3 sticky top-2 z-[1] bg-card/70 border-border/70">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <Badge tone="accent">当前查看 Q{questionId}</Badge>
+            {focusHit && <Badge tone="green">命中本次 focus</Badge>}
+            {numericScore != null && numericScore < 6 && <Badge tone="red">优先修复</Badge>}
+            {hasImproved && <Badge tone="green">已有改进版答案</Badge>}
+            {isSkipped && <Badge tone="muted">未作答</Badge>}
+          </div>
+          <div className="text-[13px] leading-[1.7] text-dim">{guidance}</div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-[12px] text-dim">第 {index + 1} / {total} 题</div>
+          <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
+            {numericScore ?? "-"}/10
+          </span>
+        </div>
+      </div>
+    </SurfaceCard>
+  );
+}
+
+function QuestionListItemCard({ item, index, active, mobile = false, onClick }) {
+  const score = item.numericScore;
+  const low = score != null && score < 6;
+
+  if (mobile) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`rounded-xl border px-3 py-2 text-left min-w-[120px] transition-all ${active ? "border-accent bg-accent/8" : low ? "border-red/30 bg-red/5" : "border-border bg-card"}`}
+      >
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{index + 1}</span>
+          <div className="flex items-center gap-1">
+            {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
+            {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
+            {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
+            {item.s.focus_hit && <span className="h-2 w-2 rounded-full bg-green" title="命中 focus" />}
+            {item.isSkipped && <span className="h-2 w-2 rounded-full bg-border" title="未作答" />}
+            {low && <span className="h-2 w-2 rounded-full bg-red" title="优先修复" />}
+          </div>
+        </div>
+        <div className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score != null ? `${score}/10` : "暂无得分"}</div>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative w-full rounded-xl px-3 py-2.5 text-left transition-all ${active ? "bg-accent/8 text-text" : low ? "bg-red/5 text-text hover:bg-red/8" : "bg-transparent hover:bg-hover/70 text-text"}`}
+    >
+      <div className={`absolute left-0 top-2 bottom-2 w-[2px] rounded-full transition-all ${active ? "bg-accent-light opacity-100" : "bg-border opacity-0 group-hover:opacity-100"}`} />
+      <div className="pl-2">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{index + 1}</span>
+            {score != null && <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
+            {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
+            {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
+            {item.s.focus_hit && <span className="h-2 w-2 rounded-full bg-green" title="命中 focus" />}
+            {item.isSkipped && <span className="h-2 w-2 rounded-full bg-border" title="未作答" />}
+            {low && <span className="h-2 w-2 rounded-full bg-red" title="优先修复" />}
+          </div>
+        </div>
+        <div className={`text-[12px] leading-[1.6] line-clamp-2 ${active ? "text-text" : "text-dim"}`}>
+          {item.isSkipped ? item.q.question : (item.s.weak_point || item.q.focus_area || item.q.question)}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function QuestionMetaRow({ question, topic, navigate, trainingBadge, scoreBadge }) {
+  return (
+    <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{question.id}</span>
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: trainingBadge.bg, color: trainingBadge.color }} title={question.training_intent || question.training_label}>{trainingBadge.label}</span>
+        {question.focus_area && <button onClick={() => topic && navigate(`/profile/topic/${topic}`)} className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer">{question.focus_area}</button>}
+      </div>
+      <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: scoreBadge.bg, color: scoreBadge.color }}>{scoreBadge.text}</span>
+    </div>
+  );
+}
+
+function AnswerReviewBlock({ answer, scoreItem, topic, question, navigate }) {
+  if (!scoreItem) return null;
+  const s = scoreItem;
+
+  return (
+    <section className="rounded-2xl bg-hover/70 px-3.5 py-3.5 md:px-4">
+      <div className="text-[12px] font-semibold text-dim mb-2">回答与点评</div>
+      <div className="rounded-xl bg-card px-3 py-3 mb-3">
+        <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
+        <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
+      </div>
+      {s.assessment && s.assessment !== "未作答" && <div className="text-sm leading-[1.8] text-text mb-2"><strong className="text-xs opacity-60">点评：</strong>{s.assessment}</div>}
+      {s.improvement && <div className="text-sm leading-[1.8] text-accent-light bg-accent/8 rounded-xl px-3 py-2.5 mb-2"><strong className="text-xs opacity-70">改进建议：</strong>{s.improvement}</div>}
+      {s.understanding && s.understanding !== "未作答" && <div className="text-[13px] text-dim italic">理解程度：{s.understanding}</div>}
+      {s.weak_point && (
+        <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
+          <span>薄弱点标签：{s.weak_point}</span>
+          {s.semantic_bucket && topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer" title={s.semantic_bucket}>{bucketLabel(s.semantic_bucket)}</button>}
+          {topic && <button onClick={() => navigate(`/profile/topic/${topic}`)} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer">看专题</button>}
+          {topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || question.focus_area || question.question) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-card text-dim border-none cursor-pointer">先看题库</button>}
+          {topic && <button onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer">去修复</button>}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -736,34 +833,23 @@ function DrillReview({
             <div className="rounded-2xl bg-hover/70 px-4 py-4">
               <div className="text-[13px] font-semibold text-text mb-3">关键观察</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <div className="text-[12px] font-medium text-dim mb-2">优先修复</div>
-                  <div className="flex flex-col gap-2">
-                    {(overall?.new_weak_points || []).slice(0, 3).map((wp, i) => (
-                      <div key={i} className="rounded-xl bg-card px-3 py-2 text-[13px] leading-[1.7] text-text border border-red/10">
-                        {typeof wp === "string" ? wp : wp.point || JSON.stringify(wp)}
-                      </div>
-                    ))}
-                    {!(overall?.new_weak_points || []).length && <div className="text-[12px] text-dim">暂无新的薄弱点总结。</div>}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[12px] font-medium text-dim mb-2">本场亮点</div>
-                  <div className="flex flex-col gap-2">
-                    {(overall?.new_strong_points || []).slice(0, 3).map((sp, i) => (
-                      <div key={i} className="rounded-xl bg-card px-3 py-2 text-[13px] leading-[1.7] text-text border border-green/10">
-                        {typeof sp === "string" ? sp : sp.point || JSON.stringify(sp)}
-                      </div>
-                    ))}
-                    {!(overall?.new_strong_points || []).length && <div className="text-[12px] text-dim">暂无突出的亮点总结。</div>}
-                  </div>
-                </div>
+                <ObservationColumn
+                  title="优先修复"
+                  tone="red"
+                  items={(overall?.new_weak_points || []).slice(0, 3).map((wp) => (typeof wp === "string" ? wp : wp.point || JSON.stringify(wp)))}
+                  emptyText="暂无新的薄弱点总结。"
+                />
+                <ObservationColumn
+                  title="本场亮点"
+                  tone="green"
+                  items={(overall?.new_strong_points || []).slice(0, 3).map((sp) => (typeof sp === "string" ? sp : sp.point || JSON.stringify(sp)))}
+                  emptyText="暂无突出的亮点总结。"
+                />
               </div>
               {overall?.strategy_meta_review?.summary && (
-                <div className="mt-3 rounded-xl bg-card px-3 py-3 border border-border/70">
-                  <div className="text-[12px] font-medium text-dim mb-1.5">策略成效结论</div>
-                  <div className="text-[13px] leading-[1.8] text-text">{overall.strategy_meta_review.summary}</div>
-                </div>
+                <CalloutCard className="mt-3" title="策略成效结论">
+                  {overall.strategy_meta_review.summary}
+                </CalloutCard>
               )}
             </div>
 
@@ -813,6 +899,13 @@ function DrillReview({
         const improvedSectionOpen = sectionState.improved ?? hasImproved;
         const scoreSectionOpen = sectionState.score ?? (scoreNeedsOpen || (s.key_missing?.length > 0));
         const followupSectionOpen = sectionState.followup ?? true;
+        const guidance = isSkipped
+          ? "这题没有作答，优先级取决于它是否属于本轮 focus。若属于，建议先补；否则可放到第二轮。"
+          : numericScore != null && numericScore < 6
+            ? "这题建议优先修。先看缺失点和参考答案，再生成改进版答案，最后带着改进版回练。"
+            : numericScore != null && numericScore < 8
+              ? "这题已经有基础，但还不够稳。重点看评分细项和改进建议，把回答打磨到更自然、更完整。"
+              : "这题整体通过度较高，更适合作为高分样本，用来对照你其它题的表达方式。";
 
         return (
           <SurfaceCard className="mb-4 p-3 md:p-4 bg-card/80">
@@ -831,154 +924,83 @@ function DrillReview({
 
                 <div className="lg:hidden -mx-1 overflow-x-auto pb-1">
                   <div className="flex gap-2 px-1 min-w-max">
-                    {questionItems.map((item, idx) => {
-                      const score = item.numericScore;
-                      const active = item.q.id === activeQuestionId;
-                      const low = score != null && score < 6;
-                      return (
-                        <button
-                          key={item.q.id}
-                          type="button"
-                          onClick={() => setActiveQuestionId(item.q.id)}
-                          className={`rounded-xl border px-3 py-2 text-left min-w-[120px] transition-all ${active ? "border-accent bg-accent/8" : low ? "border-red/30 bg-red/5" : "border-border bg-card"}`}
-                        >
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{idx + 1}</span>
-                            <div className="flex items-center gap-1">
-                              {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
-                              {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
-                              {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
-                              {item.s.focus_hit && <span className="h-2 w-2 rounded-full bg-green" title="命中 focus" />}
-                              {item.isSkipped && <span className="h-2 w-2 rounded-full bg-border" title="未作答" />}
-                              {low && <span className="h-2 w-2 rounded-full bg-red" title="优先修复" />}
-                            </div>
-                          </div>
-                          <div className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score != null ? `${score}/10` : "暂无得分"}</div>
-                        </button>
-                      );
-                    })}
+                    {questionItems.map((item, idx) => (
+                      <QuestionListItemCard
+                        key={item.q.id}
+                        item={item}
+                        index={idx}
+                        active={item.q.id === activeQuestionId}
+                        mobile
+                        onClick={() => setActiveQuestionId(item.q.id)}
+                      />
+                    ))}
                   </div>
                 </div>
 
                 <div className="hidden lg:block space-y-1.5 max-h-[72vh] overflow-y-auto pr-1">
-                  {questionItems.map((item, idx) => {
-                    const score = item.numericScore;
-                    const active = item.q.id === activeQuestionId;
-                    const low = score != null && score < 6;
-                    return (
-                      <button
-                        key={item.q.id}
-                        type="button"
-                        onClick={() => setActiveQuestionId(item.q.id)}
-                        className={`group relative w-full rounded-xl px-3 py-2.5 text-left transition-all ${active ? "bg-accent/8 text-text" : low ? "bg-red/5 text-text hover:bg-red/8" : "bg-transparent hover:bg-hover/70 text-text"}`}
-                      >
-                        <div className={`absolute left-0 top-2 bottom-2 w-[2px] rounded-full transition-all ${active ? "bg-accent-light opacity-100" : "bg-border opacity-0 group-hover:opacity-100"}`} />
-                        <div className="pl-2">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{idx + 1}</span>
-                              {score != null && <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
-                              {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
-                              {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
-                              {item.s.focus_hit && <span className="h-2 w-2 rounded-full bg-green" title="命中 focus" />}
-                              {item.isSkipped && <span className="h-2 w-2 rounded-full bg-border" title="未作答" />}
-                              {low && <span className="h-2 w-2 rounded-full bg-red" title="优先修复" />}
-                            </div>
-                          </div>
-                          <div className={`text-[12px] leading-[1.6] line-clamp-2 ${active ? "text-text" : "text-dim"}`}>
-                            {item.isSkipped ? item.q.question : (item.s.weak_point || item.q.focus_area || item.q.question)}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {questionItems.map((item, idx) => (
+                    <QuestionListItemCard
+                      key={item.q.id}
+                      item={item}
+                      index={idx}
+                      active={item.q.id === activeQuestionId}
+                      onClick={() => setActiveQuestionId(item.q.id)}
+                    />
+                  ))}
                 </div>
               </SurfaceCard>
 
               <div>
-                <SurfaceCard className="mb-3 px-4 py-3 sticky top-2 z-[1] bg-card/70 border-border/70">
-                  <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge tone="accent">当前查看 Q{q.id}</Badge>
-                      {s.focus_hit && <Badge tone="green">命中本次 focus</Badge>}
-                      {numericScore != null && numericScore < 6 && <Badge tone="red">优先修复</Badge>}
-                      {improvedAnswers[q.id]?.improved_answer && <Badge tone="green">已有改进版答案</Badge>}
-                    </div>
-                    <div className="text-[12px] text-dim">第 {activeIndex + 1} / {questionItems.length} 题</div>
-                  </div>
-                  <div className="text-[12px] leading-[1.7] text-dim">像翻书一样逐题查看；左侧目录负责跳题，右侧负责深入复盘。</div>
-                </SurfaceCard>
+                <QuestionSummaryStrip
+                  questionId={q.id}
+                  index={activeIndex}
+                  total={questionItems.length}
+                  numericScore={numericScore}
+                  focusHit={s.focus_hit}
+                  hasImproved={!!improvedAnswers[q.id]?.improved_answer}
+                  isSkipped={isSkipped}
+                  guidance={guidance}
+                />
 
                 <SurfaceCard className="px-4 py-4 md:px-5 mb-4 animate-fade-in">
-                  <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
-                      <span className="text-xs px-2 py-0.5 rounded" style={{ background: tb.bg, color: tb.color }} title={q.training_intent || q.training_label}>{tb.label}</span>
-                      {q.focus_area && <button onClick={() => topic && navigate(`/profile/topic/${topic}`)} className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer">{q.focus_area}</button>}
-                    </div>
-                    <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>{numericScore ?? "-"}/10</span>
-                  </div>
+                  <QuestionMetaRow
+                    question={q}
+                    topic={topic}
+                    navigate={navigate}
+                    trainingBadge={tb}
+                    scoreBadge={{ bg: sc.bg, color: sc.color, text: `${numericScore ?? "-"}/10` }}
+                  />
 
                   <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
 
                   <div className="mb-3 rounded-xl border border-border/70 bg-hover/60 px-3 py-2.5 text-[13px] leading-[1.7] text-dim">
-                    {isSkipped
-                      ? "这题没有作答，优先级取决于它是否属于本轮 focus。若属于，建议先补；否则可放到第二轮。"
-                      : numericScore != null && numericScore < 6
-                        ? "这题建议优先修。先看缺失点和参考答案，再生成改进版答案，最后带着改进版回练。"
-                        : numericScore != null && numericScore < 8
-                          ? "这题已经有基础，但还不够稳。重点看评分细项和改进建议，把回答打磨到更自然、更完整。"
-                          : "这题整体通过度较高，更适合作为高分样本，用来对照你其它题的表达方式。"}
+                    {guidance}
                   </div>
 
                   {isSkipped ? (
                     <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
                   ) : (
                     <div className="space-y-3">
-                      <section className="rounded-2xl bg-hover/70 px-3.5 py-3.5 md:px-4">
-                        <div className="text-[12px] font-semibold text-dim mb-2">回答与点评</div>
-                        <div className="rounded-xl bg-card px-3 py-3 mb-3">
-                          <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
-                          <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
-                        </div>
-                        {s.assessment && s.assessment !== "未作答" && <div className="text-sm leading-[1.8] text-text mb-2"><strong className="text-xs opacity-60">点评：</strong>{s.assessment}</div>}
-                        {s.improvement && <div className="text-sm leading-[1.8] text-accent-light bg-accent/8 rounded-xl px-3 py-2.5 mb-2"><strong className="text-xs opacity-70">改进建议：</strong>{s.improvement}</div>}
-                        {s.understanding && s.understanding !== "未作答" && <div className="text-[13px] text-dim italic">理解程度：{s.understanding}</div>}
-                        {s.weak_point && (
-                          <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
-                            <span>薄弱点标签：{s.weak_point}</span>
-                            {s.semantic_bucket && topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer" title={s.semantic_bucket}>{bucketLabel(s.semantic_bucket)}</button>}
-                            {topic && <button onClick={() => navigate(`/profile/topic/${topic}`)} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer">看专题</button>}
-                            {topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-card text-dim border-none cursor-pointer">先看题库</button>}
-                            {topic && <button onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer">去修复</button>}
-                          </div>
-                        )}
-                      </section>
+                      <AnswerReviewBlock answer={answer} scoreItem={s} topic={topic} question={q} navigate={navigate} />
 
-                      <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={scoreSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), score: !!e.currentTarget?.open } }))}>
-                        <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
-                          <span className="text-[13px] font-semibold text-text">评分细项</span>
-                          <span className="text-[11px] text-dim group-open:hidden">展开</span>
-                          <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
-                        </summary>
-                        <div className="mt-3">
-                          {s.key_missing?.length > 0 && <div className="text-[13px] text-red leading-normal mb-2">遗漏关键点：{s.key_missing.join("、")}</div>}
-                          <InlineAutoScoreDetail detail={s.auto_score_detail} />
-                        </div>
-                      </details>
+                      <ExpandableReviewSection
+                        title="评分细项"
+                        open={scoreSectionOpen}
+                        onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), score: !!e.currentTarget?.open } }))}
+                      >
+                        {s.key_missing?.length > 0 && <div className="text-[13px] text-red leading-normal mb-2">遗漏关键点：{s.key_missing.join("、")}</div>}
+                        <InlineAutoScoreDetail detail={s.auto_score_detail} />
+                      </ExpandableReviewSection>
 
                       {topic && (
                         <>
-                          <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={refSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), reference: !!e.currentTarget?.open } }))}>
-                            <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
-                              <span className="text-[13px] font-semibold text-text flex items-center gap-1.5"><BookOpen size={13} /> 标准参考答案</span>
-                              <span className="text-[11px] text-dim group-open:hidden">展开</span>
-                              <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
-                            </summary>
-                            <div className="mt-3 text-sm leading-[1.8]">
+                          <ExpandableReviewSection
+                            title="标准参考答案"
+                            icon={<BookOpen size={13} />}
+                            open={refSectionOpen}
+                            onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), reference: !!e.currentTarget?.open } }))}
+                          >
+                            <div className="text-sm leading-[1.8]">
                               {refAnswers[q.id]?.reference_answer ? (
                                 <>
                                   <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
@@ -998,16 +1020,16 @@ function DrillReview({
                                 <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50" onClick={() => handleRefAnswer(q.id, q.question)} disabled={refLoading[q.id]}><BookOpen size={13} />{refLoading[q.id] ? "正在生成参考答案..." : "生成标准参考答案"}</button>
                               )}
                             </div>
-                          </details>
+                          </ExpandableReviewSection>
 
                           {improvedAnswers[q.id]?.improved_answer && (
-                            <details className="rounded-2xl border border-green/20 bg-green/5 px-3.5 py-3 group" open={improvedSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), improved: !!e.currentTarget?.open } }))}>
-                              <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
-                                <span className="text-[13px] font-semibold text-text">改进版答案</span>
-                                <span className="text-[11px] text-dim group-open:hidden">展开</span>
-                                <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
-                              </summary>
-                              <div className="mt-3">
+                            <ExpandableReviewSection
+                              title="改进版答案"
+                              tone="green"
+                              open={improvedSectionOpen}
+                              onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), improved: !!e.currentTarget?.open } }))}
+                            >
+                              <div>
                                 <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
                                   <span>我的改进版答案</span>
                                   {improvedAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
@@ -1017,17 +1039,16 @@ function DrillReview({
                                   <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}><BookOpen size={13} /> 带着这版再练一遍</button>
                                 </div>
                               </div>
-                            </details>
+                            </ExpandableReviewSection>
                           )}
 
                           {followupOpen[q.id] && (
-                            <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={followupSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), followup: !!e.currentTarget?.open } }))}>
-                              <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
-                                <span className="text-[13px] font-semibold text-text">AI 继续追问</span>
-                                <span className="text-[11px] text-dim group-open:hidden">展开</span>
-                                <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
-                              </summary>
-                              <div className="mt-3 rounded-xl bg-hover px-3 py-3">
+                            <ExpandableReviewSection
+                              title="AI 继续追问"
+                              open={followupSectionOpen}
+                              onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), followup: !!e.currentTarget?.open } }))}
+                            >
+                              <div className="rounded-xl bg-hover px-3 py-3">
                                 <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
                                 <div className="flex flex-wrap gap-2 mb-2.5">
                                   {FOLLOWUP_QUICK_ACTIONS.map((item) => (
@@ -1056,7 +1077,7 @@ function DrillReview({
                                   </div>
                                 )}
                               </div>
-                            </details>
+                            </ExpandableReviewSection>
                           )}
                         </>
                       )}

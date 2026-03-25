@@ -171,3 +171,96 @@ export function InsightCard({ title, subtitle = null, action = null, children, c
     </SurfaceCard>
   );
 }
+
+export function ScoreRows({ items = [], labelWidth = "w-[72px] md:w-[110px]", className = "" }) {
+  return (
+    <div className={className}>
+      {items.map((item, idx) => (
+        <div key={item.key || idx} className="flex items-center gap-2.5 mb-2.5">
+          <div className={`${labelWidth} text-[12px] md:text-[13px] text-dim text-right shrink-0 leading-4`}>{item.label}</div>
+          <div className="flex-1 h-2 rounded bg-border overflow-hidden">
+            <div
+              className="h-full rounded transition-[width] duration-500 ease-in-out"
+              style={{ width: `${item.percent}%`, background: item.color }}
+            />
+          </div>
+          <div className="w-10 text-sm font-semibold text-right shrink-0" style={{ color: item.color }}>{item.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function InsightList({ title = null, items = [], tone = "muted", className = "" }) {
+  if (!items?.length) return null;
+
+  const toneClass = {
+    muted: "bg-hover border-border text-text",
+    green: "bg-green/6 border-green/15 text-text",
+    red: "bg-red/8 border-red/20 text-text",
+    accent: "bg-accent/8 border-accent/20 text-text",
+  }[tone] || "bg-hover border-border text-text";
+
+  return (
+    <div className={className}>
+      {title ? <div className="text-[15px] font-medium mb-2">{title}</div> : null}
+      <div className="flex flex-col gap-1.5">
+        {items.map((item, idx) => (
+          <div key={idx} className={`px-3 py-2 rounded-lg text-[13px] border ${toneClass}`}>
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ObservationColumn({ title, items = [], tone = "muted", emptyText = "暂无内容。", className = "" }) {
+  return (
+    <div className={className}>
+      <div className="text-[12px] font-medium text-dim mb-2">{title}</div>
+      {items?.length ? (
+        <InsightList items={items} tone={tone} />
+      ) : (
+        <div className="text-[12px] text-dim">{emptyText}</div>
+      )}
+    </div>
+  );
+}
+
+export function CalloutCard({ title, children, className = "" }) {
+  return (
+    <div className={`rounded-xl bg-card px-3 py-3 border border-border/70 ${className}`}>
+      {title ? <div className="text-[12px] font-medium text-dim mb-1.5">{title}</div> : null}
+      <div className="text-[13px] leading-[1.8] text-text">{children}</div>
+    </div>
+  );
+}
+
+export function ExpandableReviewSection({
+  title,
+  icon = null,
+  open = false,
+  onToggle,
+  children,
+  className = "",
+  tone = "default",
+}) {
+  const toneClass = {
+    default: "border-border/70 bg-card/70",
+    green: "border-green/20 bg-green/5",
+  }[tone] || "border-border/70 bg-card/70";
+
+  return (
+    <details className={`rounded-2xl border px-3.5 py-3 group ${toneClass} ${className}`} open={open} onToggle={onToggle}>
+      <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+        <span className="text-[13px] font-semibold text-text flex items-center gap-1.5">{icon}{title}</span>
+        <>
+          <span className="text-[11px] text-dim group-open:hidden">展开</span>
+          <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
+        </>
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+}
