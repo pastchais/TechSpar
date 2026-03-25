@@ -912,7 +912,7 @@ function DrillReview({
               : "这题整体通过度较高，更适合作为高分样本，用来对照你其它题的表达方式。";
 
         return (
-          <SurfaceCard className="mb-4 p-3 md:p-4 bg-card/80">
+          <div className="mb-4 p-3 md:p-4">
             <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] items-start gap-4">
               <SurfaceCard className="p-3 md:p-4 bg-card/60 border-border/60">
                 <div className="mb-3 flex items-center justify-between gap-2">
@@ -1086,7 +1086,7 @@ function DrillReview({
                 </div>
               </div>
             </div>
-          </SurfaceCard>
+          </div>
         );
       })()}
     </>
