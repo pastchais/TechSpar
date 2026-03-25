@@ -789,7 +789,7 @@ function DrillReview({
 
         return (
           <div className="mb-4 rounded-[24px] border border-border bg-card/80 p-3 md:p-4">
-            <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4">
               <div className="rounded-2xl border border-border/60 bg-card/60 p-3 md:p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
@@ -798,7 +798,36 @@ function DrillReview({
                   </div>
                   <Badge tone="muted">共 {questionItems.length} 题</Badge>
                 </div>
-                <div className="space-y-1.5 max-h-[72vh] overflow-y-auto pr-1">
+
+                <div className="lg:hidden -mx-1 overflow-x-auto pb-1">
+                  <div className="flex gap-2 px-1 min-w-max">
+                    {questionItems.map((item, idx) => {
+                      const score = item.numericScore;
+                      const active = item.q.id === activeQuestionId;
+                      const low = score != null && score < 6;
+                      return (
+                        <button
+                          key={item.q.id}
+                          type="button"
+                          onClick={() => setActiveQuestionId(item.q.id)}
+                          className={`rounded-xl border px-3 py-2 text-left min-w-[120px] transition-all ${active ? "border-accent bg-accent/8" : "border-border bg-card"}`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{idx + 1}</span>
+                            <div className="flex items-center gap-1">
+                              {item.s.focus_hit && <span className="h-2 w-2 rounded-full bg-green" title="命中 focus" />}
+                              {item.isSkipped && <span className="h-2 w-2 rounded-full bg-border" title="未作答" />}
+                              {low && <span className="h-2 w-2 rounded-full bg-red" title="优先修复" />}
+                            </div>
+                          </div>
+                          <div className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score != null ? `${score}/10` : "暂无得分"}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="hidden lg:block space-y-1.5 max-h-[72vh] overflow-y-auto pr-1">
                   {questionItems.map((item, idx) => {
                     const score = item.numericScore;
                     const active = item.q.id === activeQuestionId;
@@ -834,7 +863,7 @@ function DrillReview({
               </div>
 
               <div>
-                <div className="mb-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3">
+                <div className="mb-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 sticky top-2 z-[1]">
                   <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge tone="accent">当前查看 Q{q.id}</Badge>
