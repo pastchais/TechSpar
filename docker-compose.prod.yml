@@ -1,8 +1,6 @@
 services:
   techspar-backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: ${TECHSPAR_BACKEND_IMAGE:-techspar_techspar-backend:latest}
     container_name: techspar-backend
     restart: unless-stopped
     env_file:
@@ -17,9 +15,7 @@ services:
       - "127.0.0.1:8324:8000"
 
   techspar-frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ${TECHSPAR_FRONTEND_IMAGE:-techspar_techspar-frontend:latest}
     container_name: techspar-frontend
     restart: unless-stopped
     depends_on:
