@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { getTopics, getGraphData } from "../api/interview";
 import { getTopicIcon } from "../utils/topicIcons";
+import { Badge, EmptyState, PageTitle, SubtleButton, SurfaceCard } from "../components/ui.jsx";
 
 const SIMILARITY_THRESHOLD = 0.65;
 
@@ -12,6 +14,7 @@ function scoreToColor(score) {
 }
 
 export default function Graph() {
+  const navigate = useNavigate();
   const [topics, setTopics] = useState({});
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [graphData, setGraphData] = useState(null);
@@ -36,7 +39,6 @@ export default function Graph() {
       .finally(() => setGraphLibLoading(false));
   }, [selectedTopic, ForceGraphComponent]);
 
-  // Resize observer for responsive canvas
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -55,7 +57,6 @@ export default function Graph() {
     try {
       const data = await getGraphData(key);
       setGraphData(data);
-      // Zoom to fit after data loads
       setTimeout(() => fgRef.current?.zoomToFit(400, 40), 300);
     } catch {
       setGraphData({ nodes: [], links: [] });
@@ -70,7 +71,6 @@ export default function Graph() {
     const isLight = document.documentElement.getAttribute("data-theme") === "light";
     const textColor = isLight ? "#18181B" : "#FAFAF9";
 
-    // Glow for hovered node
     if (hoveredNode === node) {
       ctx.shadowColor = color;
       ctx.shadowBlur = 16;
@@ -89,7 +89,6 @@ export default function Graph() {
       ctx.stroke();
     }
 
-    // Label
     const label = node.focus_area || node.question.slice(0, 20);
     ctx.font = `${hoveredNode === node ? 12 : 10}px DM Sans, sans-serif`;
     ctx.textAlign = "center";
@@ -110,37 +109,53 @@ export default function Graph() {
   }, []);
 
   const topicEntries = Object.entries(topics);
+  const nodeCount = graphData?.nodes?.length || 0;
+  const linkCount = graphData?.links?.length || 0;
+  const graphIsSparse = selectedTopic && graphData && nodeCount > 0 && linkCount === 0;
 
   return (
-    <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-4xl mx-auto w-full">
-      <h1 className="text-2xl md:text-[28px] font-display font-bold mb-6">题目图谱</h1>
+    <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-5xl mx-auto w-full">
+      <PageTitle
+        title="题目图谱"
+        subtitle="把同一专题下已经练过并完成复盘的题目连成图，帮助你看清哪些题在考同一类能力，哪些薄弱点在反复出现。"
+      />
 
-      {/* Topic selector */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {topicEntries.map(([key, info]) => (
-          <button
-            key={key}
-            className={`px-4 py-2 rounded-lg text-sm transition-all border ${
-              selectedTopic === key
-                ? "bg-accent/15 border-accent text-accent-light"
-                : "bg-card border-border text-dim hover:text-text hover:border-accent/50"
-            }`}
-            onClick={() => handleSelectTopic(key)}
-          >
-            <span className="inline-flex align-middle mr-1">{getTopicIcon(info.icon, 14)}</span>{info.name}
-          </button>
-        ))}
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-dim">
+        <Badge tone="muted">仅统计已完成复盘的专项训练</Badge>
+        <Badge tone="muted">颜色表示得分区间</Badge>
+        <Badge tone="muted">连线表示题目语义相近</Badge>
       </div>
 
-      {/* Graph area */}
+      <SurfaceCard className="mt-6 px-4 py-4 md:px-5">
+        <div className="mb-3 text-[14px] font-semibold text-text">选择一个专题查看图谱</div>
+        <div className="flex flex-wrap gap-2">
+          {topicEntries.map(([key, info]) => (
+            <button
+              key={key}
+              className={`px-4 py-2 rounded-lg text-sm transition-all border ${
+                selectedTopic === key
+                  ? "bg-accent/15 border-accent text-accent-light"
+                  : "bg-card border-border text-dim hover:text-text hover:border-accent/50"
+              }`}
+              onClick={() => handleSelectTopic(key)}
+            >
+              <span className="inline-flex align-middle mr-1">{getTopicIcon(info.icon, 14)}</span>{info.name}
+            </button>
+          ))}
+        </div>
+      </SurfaceCard>
+
       <div
         ref={containerRef}
-        className="bg-card border border-border rounded-box overflow-hidden relative"
+        className="mt-4 bg-card border border-border rounded-box overflow-hidden relative"
         style={{ minHeight: 400 }}
       >
         {!selectedTopic && (
-          <div className="flex items-center justify-center h-[400px] text-dim text-sm">
-            选择一个领域查看题目关联图谱
+          <div className="p-6 md:p-8">
+            <EmptyState
+              title="先选择一个专题"
+              description="图谱不会展示全部题库，而是基于你已经完成复盘的专项训练记录生成。先选一个领域，看看哪些题在考同一类能力。"
+            />
           </div>
         )}
 
@@ -151,8 +166,17 @@ export default function Graph() {
         )}
 
         {selectedTopic && !loading && graphData && graphData.nodes.length === 0 && (
-          <div className="flex items-center justify-center h-[400px] text-dim text-sm">
-            该领域暂无已评分的训练记录
+          <div className="p-6 md:p-8">
+            <EmptyState
+              title="这个专题的数据还不够生成图谱"
+              description="图谱只会读取当前专题下已经完成复盘的专项训练记录。先做几轮专项训练并完成评分复盘，再回来这里看题目之间的关联。"
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
+                  <SubtleButton onClick={() => navigate("/")}>去开始专项训练</SubtleButton>
+                  <SubtleButton onClick={() => navigate("/history")}>查看历史记录</SubtleButton>
+                </div>
+              }
+            />
           </div>
         )}
 
@@ -179,7 +203,6 @@ export default function Graph() {
           />
         )}
 
-        {/* Tooltip */}
         {hoveredNode && (
           <div className="absolute top-3 right-3 bg-hover border border-border rounded-lg px-4 py-3 max-w-[280px] text-sm pointer-events-none animate-fade-in z-10">
             <div className="font-medium text-text leading-snug mb-2">{hoveredNode.question}</div>
@@ -194,27 +217,37 @@ export default function Graph() {
         )}
       </div>
 
-      {/* Legend */}
       {selectedTopic && graphData && graphData.nodes.length > 0 && (
-        <div className="flex items-center gap-5 mt-4 text-[13px] text-dim">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-green inline-block" />
-            <span>8+</span>
+        <>
+          <div className="flex flex-wrap items-center gap-5 mt-4 text-[13px] text-dim">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-green inline-block" />
+              <span>8+</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-accent-light inline-block" />
+              <span>6-8</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-orange inline-block" />
+              <span>4-6</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red inline-block" />
+              <span>&lt;4</span>
+            </div>
+            <span className="ml-auto">共 {nodeCount} 题 · {linkCount} 条关联</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-accent-light inline-block" />
-            <span>6-8</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-orange inline-block" />
-            <span>4-6</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-red inline-block" />
-            <span>&lt;4</span>
-          </div>
-          <span className="ml-auto">共 {graphData.nodes.length} 题</span>
-        </div>
+
+          {graphIsSparse && (
+            <SurfaceCard className="mt-4 px-4 py-3 border-orange/20 bg-orange/5">
+              <div className="text-[13px] font-semibold text-text">当前图谱仍然偏稀疏</div>
+              <div className="mt-1 text-[12px] leading-[1.7] text-dim">
+                已经有题目节点，但暂时还没有达到相似度阈值的关联边。通常是因为这个专题下的已复盘题目还不够多，或者题目分布还比较分散。继续做几轮专项训练后，这里会更有参考价值。
+              </div>
+            </SurfaceCard>
+          )}
+        </>
       )}
     </div>
   );
