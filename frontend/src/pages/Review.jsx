@@ -603,20 +603,24 @@ function DrillReview({
     return seeded;
   });
   const [showSummary, setShowSummary] = useState(true);
+  const [openedQuestionState, setOpenedQuestionState] = useState({});
 
   const questionItems = (questions || []).map((q) => {
     const s = scoreMap[q.id] || {};
     const answer = answerMap[q.id];
     const isSkipped = !answer;
     const numericScore = typeof s.score === "number" ? s.score : null;
+    const hasReference = !!persistedReferenceAnswers[q.id]?.reference_answer;
+    const hasImproved = !!persistedImprovedAnswers[q.id]?.improved_answer;
+    const hasFollowup = Array.isArray(persistedReferenceFollowups[`q:${q.id}`]) && persistedReferenceFollowups[`q:${q.id}`].length > 0;
     const priority = [
       isSkipped ? 0 : 1,
       s.focus_hit ? 3 : 0,
       numericScore != null ? Math.max(0, 10 - numericScore) : 0,
       s.key_missing?.length || 0,
-      s.improved ? 0 : 0.5,
+      hasImproved ? 0 : 0.5,
     ].reduce((a, b) => a + b, 0);
-    return { q, s, answer, isSkipped, numericScore, priority };
+    return { q, s, answer, isSkipped, numericScore, priority, hasReference, hasImproved, hasFollowup };
   });
 
   const defaultQuestionId = questionItems.length
@@ -783,9 +787,14 @@ function DrillReview({
 
       <SectionTitle className="mt-2">逐题复盘</SectionTitle>
       {questionItems.length > 0 && activeItem && (() => {
-        const { q, s, answer, isSkipped, numericScore } = activeItem;
+        const { q, s, answer, isSkipped, numericScore, hasReference, hasImproved } = activeItem;
         const sc = numericScore != null ? getScoreColor(numericScore) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
         const tb = trainingLabelBadge(q.training_label);
+        const sectionState = openedQuestionState[q.id] || {};
+        const scoreNeedsOpen = numericScore != null && numericScore < 6;
+        const refSectionOpen = sectionState.reference ?? (hasReference && !hasImproved);
+        const improvedSectionOpen = sectionState.improved ?? hasImproved;
+        const scoreSectionOpen = sectionState.score ?? (scoreNeedsOpen || (s.key_missing?.length > 0));
 
         return (
           <div className="mb-4 rounded-[24px] border border-border bg-card/80 p-3 md:p-4">
@@ -815,6 +824,12 @@ function DrillReview({
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{idx + 1}</span>
                             <div className="flex items-center gap-1">
+                              {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
+                              {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
+                              {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
+                              {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
+                              {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
+                              {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
                               {item.s.focus_hit && <span className="h-2 w-2 rounded-full bg-green" title="命中 focus" />}
                               {item.isSkipped && <span className="h-2 w-2 rounded-full bg-border" title="未作答" />}
                               {low && <span className="h-2 w-2 rounded-full bg-red" title="优先修复" />}
@@ -847,6 +862,9 @@ function DrillReview({
                               {score != null && <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
+                              {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
+                              {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
+                              {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
                               {item.s.focus_hit && <span className="h-2 w-2 rounded-full bg-green" title="命中 focus" />}
                               {item.isSkipped && <span className="h-2 w-2 rounded-full bg-border" title="未作答" />}
                               {low && <span className="h-2 w-2 rounded-full bg-red" title="优先修复" />}
@@ -913,7 +931,7 @@ function DrillReview({
                         )}
                       </section>
 
-                      <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open>
+                      <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={scoreSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), score: e.currentTarget.open } }))}>
                         <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
                           <span className="text-[13px] font-semibold text-text">评分细项</span>
                           <span className="text-[11px] text-dim group-open:hidden">展开</span>
@@ -927,7 +945,7 @@ function DrillReview({
 
                       {topic && (
                         <>
-                          <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group">
+                          <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={refSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), reference: e.currentTarget.open } }))}>
                             <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
                               <span className="text-[13px] font-semibold text-text flex items-center gap-1.5"><BookOpen size={13} /> 标准参考答案</span>
                               <span className="text-[11px] text-dim group-open:hidden">展开</span>
@@ -956,7 +974,7 @@ function DrillReview({
                           </details>
 
                           {improvedAnswers[q.id]?.improved_answer && (
-                            <details className="rounded-2xl border border-green/20 bg-green/5 px-3.5 py-3 group">
+                            <details className="rounded-2xl border border-green/20 bg-green/5 px-3.5 py-3 group" open={improvedSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), improved: e.currentTarget.open } }))}>
                               <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
                                 <span className="text-[13px] font-semibold text-text">改进版答案</span>
                                 <span className="text-[11px] text-dim group-open:hidden">展开</span>
@@ -976,7 +994,7 @@ function DrillReview({
                           )}
 
                           {followupOpen[q.id] && (
-                            <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open>
+                            <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={scoreSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), score: e.currentTarget.open } }))}>
                               <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
                                 <span className="text-[13px] font-semibold text-text">AI 继续追问</span>
                                 <span className="text-[11px] text-dim group-open:hidden">展开</span>
