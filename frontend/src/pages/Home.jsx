@@ -499,10 +499,18 @@ export default function Home() {
               </button>
             )}
           </div>
+          <div className="mb-3 flex flex-wrap gap-2">
+            <Badge tone="muted">按当前薄弱程度排序</Badge>
+            {recommendedTopicKey && <Badge tone="orange">橙色表示当前建议优先</Badge>}
+            <Badge tone="green">绿色表示当前已选中</Badge>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 mb-4">
-            {rankedTopics.map(([key, info]) => {
+            {rankedTopics.map(([key, info], idx) => {
               const isRecommendedTopic = key === recommendedTopicKey;
               const isSelected = selectedTopic === key;
+              const masteryScore = mastery[key]?.score ?? null;
+              const cardFocusLabel = isRecommendedTopic ? (primaryRecommendation?.focus_label || "") : "";
+              const cardTrendLabel = isRecommendedTopic ? (primaryRecommendation?.trend_label || "") : "";
               return (
                 <TopicCard
                   key={key}
@@ -511,6 +519,10 @@ export default function Home() {
                   icon={info.icon}
                   recommended={isRecommendedTopic}
                   selected={isSelected}
+                  score={masteryScore}
+                  focusLabel={cardFocusLabel}
+                  trendLabel={cardTrendLabel}
+                  rank={idx < 3 ? idx : null}
                   onClick={() => {
                     setSelectedTopic(key);
                     if (primaryRecommendation?.topic === key) {
@@ -575,6 +587,9 @@ export default function Home() {
                 )}
                 {currentStrategyLabel && <Badge tone="muted">训练意图：{currentStrategyLabel}</Badge>}
                 {selectedMastery?.score != null && <Badge tone="muted">当前分数：{Math.round(selectedMastery.score)}/100</Badge>}
+                {selectedTopic && rankedTopics.findIndex(([key]) => key === selectedTopic) > -1 && (
+                  <Badge tone="muted">当前排序：第 {rankedTopics.findIndex(([key]) => key === selectedTopic) + 1} 位</Badge>
+                )}
               </div>
 
               {(selectedTopic === recommendedTopicKey || quickFocusLabel || quickFocus) && (
