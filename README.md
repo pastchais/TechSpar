@@ -10,7 +10,7 @@
 
 **An AI interview coach that learns you — the more you practice, the better it knows your weaknesses.**
 
-[Demo](https://aari.top/) · [快速开始](#快速开始) · [English](README.en.md)
+[Demo](https://stu.6bits.de/) · [快速开始](#快速开始) · [部署说明](DEPLOY.md) · [English](README.en.md)
 
 </div>
 
@@ -41,7 +41,7 @@
 
 ## Demo
 
-Try TechSpar online: **[https://aari.top/](https://aari.top/)**
+Try TechSpar online: **[https://stu.6bits.de/](https://stu.6bits.de/)**
 
 | Email | Password |
 |-------|----------|
