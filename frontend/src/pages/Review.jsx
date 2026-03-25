@@ -693,34 +693,91 @@ function DrillReview({
           <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
             <div>
               <div className="text-lg font-semibold mb-2">整体评价</div>
-              <div>
-                <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
+              <div className="flex items-end gap-2">
+                <span className="inline-block text-[32px] font-bold" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
                   {avgScore}
                 </span>
-                <span className="text-base text-dim">/10</span>
+                <span className="text-base text-dim mb-1">/10</span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">共 {questions?.length || 0} 题</span>
-              <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">已答 {answers?.filter((a) => a.answer).length || 0} 题</span>
-              {overall?.targeting_stats?.focus_label && <span className="inline-flex items-center rounded-lg bg-green/10 px-3.5 py-1.5 text-[13px] font-medium text-green">本轮 focus：{overall.targeting_stats.focus_label}</span>}
+            <div className="flex flex-wrap gap-2.5">
+              <Badge tone="muted" className="px-3 py-1 text-[12px]">共 {questions?.length || 0} 题</Badge>
+              <Badge tone="muted" className="px-3 py-1 text-[12px]">已答 {answers?.filter((a) => a.answer).length || 0} 题</Badge>
+              {overall?.targeting_stats?.focus_label && <Badge tone="green" className="px-3 py-1 text-[12px]">focus：{overall.targeting_stats.focus_label}</Badge>}
+              {overall?.targeting_stats?.hit_rate != null && <Badge tone="muted" className="px-3 py-1 text-[12px]">命中率 {(overall.targeting_stats.hit_rate * 100).toFixed(0)}%</Badge>}
+              {overall?.targeting_stats?.repair_rate != null && <Badge tone="muted" className="px-3 py-1 text-[12px]">修复率 {(overall.targeting_stats.repair_rate * 100).toFixed(0)}%</Badge>}
             </div>
           </div>
+
           {overall?.summary && <div className="text-[14px] leading-[1.8] text-text mb-4">{overall.summary}</div>}
 
-          <DimensionScores dimensionScores={overall?.dimension_scores} avgScore={overall?.avg_score} />
-          <AutoScoreCard autoScore={autoScore} />
-          <TrendTrainingMetaCard meta={overall?.trend_training_meta} focusTrend={overall?.targeting_stats?.focus_trend || overall?.practice_comparison?.baseline?.focus_trend} />
-          <PracticeComparisonCard comparison={overall?.practice_comparison} />
-          <TrainingLabelStatsCard stats={overall?.training_label_stats} />
-          <PracticeTrendCard focusLabel={overall?.practice_comparison?.focus_label} items={practiceTrend} />
-          <StrategyMetaReviewCard
-            trainingMeta={overall?.trend_training_meta}
-            targeting={overall?.targeting_stats}
-            comparison={overall?.practice_comparison}
-            items={practiceTrend}
-            persistedMeta={overall?.strategy_meta_review}
-          />
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] gap-4 mb-4">
+            <div className="rounded-2xl bg-hover/70 px-4 py-4">
+              <div className="text-[13px] font-semibold text-text mb-3">关键观察</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[12px] font-medium text-dim mb-2">优先修复</div>
+                  <div className="flex flex-col gap-2">
+                    {(overall?.new_weak_points || []).slice(0, 3).map((wp, i) => (
+                      <div key={i} className="rounded-xl bg-card px-3 py-2 text-[13px] leading-[1.7] text-text border border-red/10">
+                        {typeof wp === "string" ? wp : wp.point || JSON.stringify(wp)}
+                      </div>
+                    ))}
+                    {!(overall?.new_weak_points || []).length && <div className="text-[12px] text-dim">暂无新的薄弱点总结。</div>}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[12px] font-medium text-dim mb-2">本场亮点</div>
+                  <div className="flex flex-col gap-2">
+                    {(overall?.new_strong_points || []).slice(0, 3).map((sp, i) => (
+                      <div key={i} className="rounded-xl bg-card px-3 py-2 text-[13px] leading-[1.7] text-text border border-green/10">
+                        {typeof sp === "string" ? sp : sp.point || JSON.stringify(sp)}
+                      </div>
+                    ))}
+                    {!(overall?.new_strong_points || []).length && <div className="text-[12px] text-dim">暂无突出的亮点总结。</div>}
+                  </div>
+                </div>
+              </div>
+              {overall?.strategy_meta_review?.summary && (
+                <div className="mt-3 rounded-xl bg-card px-3 py-3 border border-border/70">
+                  <div className="text-[12px] font-medium text-dim mb-1.5">策略成效结论</div>
+                  <div className="text-[13px] leading-[1.8] text-text">{overall.strategy_meta_review.summary}</div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl bg-hover/70 px-4 py-4">
+              <div className="text-[13px] font-semibold text-text mb-3">快速画像</div>
+              <DimensionScores dimensionScores={overall?.dimension_scores} avgScore={overall?.avg_score} />
+              <AutoScoreCard autoScore={autoScore} />
+            </div>
+          </div>
+
+          <details className="rounded-2xl border border-border/70 bg-card/60 px-4 py-3 group">
+            <summary className="list-none cursor-pointer flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[13px] font-semibold text-text">展开深层数据</div>
+                <div className="text-[11px] text-dim mt-0.5">查看训练说明、对比结果、分桶表现、同目标轨迹与完整策略成效。</div>
+              </div>
+              <div className="text-[11px] text-dim">
+                <span className="group-open:hidden">展开</span>
+                <span className="hidden group-open:inline">收起</span>
+              </div>
+            </summary>
+            <div className="mt-4">
+              <TrendTrainingMetaCard meta={overall?.trend_training_meta} focusTrend={overall?.targeting_stats?.focus_trend || overall?.practice_comparison?.baseline?.focus_trend} />
+              <PracticeComparisonCard comparison={overall?.practice_comparison} />
+              <TrainingLabelStatsCard stats={overall?.training_label_stats} />
+              <PracticeTrendCard focusLabel={overall?.practice_comparison?.focus_label} items={practiceTrend} />
+              <StrategyMetaReviewCard
+                trainingMeta={overall?.trend_training_meta}
+                targeting={overall?.targeting_stats}
+                comparison={overall?.practice_comparison}
+                items={practiceTrend}
+                persistedMeta={overall?.strategy_meta_review}
+              />
+            </div>
+          </details>
         </div>
       )}
 
