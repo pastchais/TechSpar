@@ -578,6 +578,8 @@ function DrillReview({
   answers,
   topic,
   topics,
+  autoScore,
+  practiceTrend = [],
   persistedReferenceAnswers = {},
   persistedReferenceFollowups = {},
   persistedImprovedAnswers = {},
@@ -705,6 +707,20 @@ function DrillReview({
             </div>
           </div>
           {overall?.summary && <div className="text-[14px] leading-[1.8] text-text mb-4">{overall.summary}</div>}
+
+          <DimensionScores dimensionScores={overall?.dimension_scores} avgScore={overall?.avg_score} />
+          <AutoScoreCard autoScore={autoScore} />
+          <TrendTrainingMetaCard meta={overall?.trend_training_meta} focusTrend={overall?.targeting_stats?.focus_trend || overall?.practice_comparison?.baseline?.focus_trend} />
+          <PracticeComparisonCard comparison={overall?.practice_comparison} />
+          <TrainingLabelStatsCard stats={overall?.training_label_stats} />
+          <PracticeTrendCard focusLabel={overall?.practice_comparison?.focus_label} items={practiceTrend} />
+          <StrategyMetaReviewCard
+            trainingMeta={overall?.trend_training_meta}
+            targeting={overall?.targeting_stats}
+            comparison={overall?.practice_comparison}
+            items={practiceTrend}
+            persistedMeta={overall?.strategy_meta_review}
+          />
         </div>
       )}
 
@@ -979,30 +995,17 @@ export default function Review() {
   const showDrill = isDrill || isRecordingDual || (mode === "topic_drill" && (scores || questions.length > 0)) || (mode === "recording" && stateData.recording_mode === "dual");
 
   return (
-    <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-3xl mx-auto w-full">
+    <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-[1400px] mx-auto w-full">
       <PageTitle
         className="mb-8"
         title={isRecording ? "录音复盘" : showDrill ? "训练复盘" : "面试复盘"}
         subtitle={`Session: ${sessionId}`}
       />
 
-      <AutoScoreCard autoScore={autoScore} />
-      <TrendTrainingMetaCard meta={overall?.trend_training_meta} focusTrend={overall?.targeting_stats?.focus_trend || overall?.practice_comparison?.baseline?.focus_trend} />
-      <PracticeComparisonCard comparison={overall?.practice_comparison} />
-      <TrainingLabelStatsCard stats={overall?.training_label_stats} />
-      <PracticeTrendCard focusLabel={overall?.practice_comparison?.focus_label} items={practiceTrend} />
-      <StrategyMetaReviewCard
-        trainingMeta={overall?.trend_training_meta}
-        targeting={overall?.targeting_stats}
-        comparison={overall?.practice_comparison}
-        items={practiceTrend}
-        persistedMeta={overall?.strategy_meta_review}
-      />
-
       {isRecording && !isRecordingDual ? (
         <SoloRecordingReview topicsCovered={topicsCovered} overall={overall} />
       ) : showDrill ? (
-        <DrillReview sessionId={sessionId} scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} persistedReferenceAnswers={referenceAnswers} persistedReferenceFollowups={referenceFollowups} persistedImprovedAnswers={improvedAnswers} />
+        <DrillReview sessionId={sessionId} scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} topics={topics} autoScore={autoScore} practiceTrend={practiceTrend} persistedReferenceAnswers={referenceAnswers} persistedReferenceFollowups={referenceFollowups} persistedImprovedAnswers={improvedAnswers} />
       ) : (
         <>
           <DimensionScores
