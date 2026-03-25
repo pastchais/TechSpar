@@ -245,11 +245,11 @@ export default function Home() {
   return (
     <div className="flex-1 px-4 pb-10 pt-6 md:px-6 md:pb-12 md:pt-8">
       <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-8">
-        <section className="relative overflow-hidden rounded-[28px] border border-border/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.08),rgba(245,158,11,0.015))] px-5 py-5 md:px-6 md:py-6 animate-fade-in">
-          <div className="pointer-events-none absolute right-[-40px] top-[-70px] h-[180px] w-[180px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.16),transparent_62%)] blur-3xl" />
-          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <section className="relative overflow-hidden rounded-[26px] border border-border/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.08),rgba(245,158,11,0.015))] px-4 py-4 md:px-6 md:py-5 animate-fade-in">
+          <div className="pointer-events-none absolute right-[-40px] top-[-70px] h-[160px] w-[160px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.14),transparent_62%)] blur-3xl" />
+          <div className="relative z-10 flex flex-col gap-3">
             <div className="max-w-3xl">
-              <Badge tone="accent" className="mb-3 gap-1.5 px-3 py-1 text-[11px]">
+              <Badge tone="accent" className="mb-2 gap-1.5 px-3 py-1 text-[11px]">
                 <Sparkles size={13} />
                 Training launcher
               </Badge>
@@ -257,24 +257,13 @@ export default function Home() {
                 title="开始下一轮训练。"
                 subtitle="先从当前最值得修的点开始，不必自己在专题和状态里来回找入口。"
               />
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-dim">
-                <Badge tone="muted">建议 focus：{primaryRecommendation?.focus_label || "等待推荐"}</Badge>
-                {recommendationTrend ? <Badge tone="orange">当前轨迹：{recommendationTrend}</Badge> : null}
-                <Badge tone={canStart ? "green" : "muted"}>{canStart ? "配置已就绪" : "等待完成配置"}</Badge>
-              </div>
             </div>
-            <div className="rounded-2xl border border-border/70 bg-card/75 px-4 py-3 lg:min-w-[320px]">
-              <div className="text-[12px] font-medium text-dim">当前启动摘要</div>
-              <div className="mt-2 text-[14px] font-semibold text-text">{mode ? modeMeta[mode]?.label : "先选择训练模式"}</div>
-              <div className="mt-1 text-[12px] leading-[1.7] text-dim">
-                {mode === "resume"
-                  ? (resumeFile ? `将基于「${resumeFile.filename}」进入完整模拟面试。` : "上传简历后即可开始完整模拟面试。")
-                  : mode === "topic_drill"
-                    ? (selectedTopic
-                        ? `${quickFocusLabel || quickFocus ? `先修「${quickFocusLabel || quickFocus}」，` : ""}再进入「${selectedTopicInfo?.name || selectedTopic}」专题训练。`
-                        : "选择专题后，系统会收束成一轮定向训练。")
-                    : "先选模式，再决定这一轮从哪里切入。"}
-              </div>
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-dim">
+              <Badge tone="muted">建议 focus：{primaryRecommendation?.focus_label || "等待推荐"}</Badge>
+              {recommendationTrend ? <Badge tone="orange">当前轨迹：{recommendationTrend}</Badge> : null}
+              <Badge tone={canStart ? "green" : "muted"}>{canStart ? "配置已就绪" : "等待完成配置"}</Badge>
+              <span className="hidden md:inline text-dim/80">·</span>
+              <span className="text-dim">{mode ? modeMeta[mode]?.label : "先选择训练模式"}</span>
             </div>
           </div>
         </section>
@@ -284,7 +273,7 @@ export default function Home() {
           subtitle="先选练法，再按系统推荐决定从哪里切入。"
           className="animate-slide-up"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" ref={modeSectionRef}>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2" ref={modeSectionRef}>
           {Object.entries(modeMeta).map(([key, meta]) => {
             const isSelected = mode === key;
             const themeColor = meta.color === "accent" ? "var(--accent)" : "var(--green)";
@@ -309,7 +298,7 @@ export default function Home() {
                     setTimeout(() => scrollToTopicSection(), 120);
                   }
                 }}
-                className={`relative overflow-hidden group flex flex-col items-start text-left p-5 md:p-6 rounded-2xl border-2 transition-all duration-500 transform active:scale-[0.98] ${
+                className={`relative overflow-hidden group flex items-center gap-3 text-left p-4 md:p-4 rounded-2xl border-2 transition-all duration-300 active:scale-[0.99] ${
                   isSelected 
                     ? `border-opacity-100 bg-opacity-10 shadow-xl` 
                     : `border-transparent bg-card hover:bg-hover/60 hover:border-border`
@@ -320,8 +309,8 @@ export default function Home() {
                   boxShadow: isSelected ? `0 12px 30px -10px ${themeColor}33` : "none"
                 }}
               >
-                <div className={`p-2.5 rounded-xl mb-3 transition-all duration-300 ${
-                  isSelected ? "scale-110" : "bg-hover text-dim group-hover:text-text"
+                <div className={`shrink-0 p-2.5 rounded-xl transition-all duration-300 ${
+                  isSelected ? "scale-105" : "bg-hover text-dim group-hover:text-text"
                 }`}
                 style={{ 
                   backgroundColor: isSelected ? themeColor : "var(--bg-hover)",
@@ -330,14 +319,16 @@ export default function Home() {
                   {meta.icon}
                 </div>
                 
-                <div className={`text-[17px] md:text-lg font-bold mb-1.5 transition-colors ${isSelected ? "text-text" : "text-dim group-hover:text-text"}`}>
-                  {meta.label}
-                </div>
-                <div className="text-[13px] text-dim leading-[1.7] opacity-80 group-hover:opacity-100 break-words">
-                  {meta.hint}
+                <div className="min-w-0 flex-1">
+                  <div className={`text-[16px] md:text-[17px] font-bold transition-colors ${isSelected ? "text-text" : "text-dim group-hover:text-text"}`}>
+                    {meta.label}
+                  </div>
+                  <div className="mt-1 text-[12px] text-dim leading-[1.6] opacity-90 break-words">
+                    {meta.hint}
+                  </div>
                 </div>
 
-                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 self-start md:self-center">
                   <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
                     isSelected
                       ? (meta.color === "accent" ? "bg-accent border-accent" : "bg-green border-green")
@@ -345,8 +336,8 @@ export default function Home() {
                   }`}>
                     {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
                   </span>
-                  <span className={`text-[12px] font-medium ${isSelected ? "text-text" : "text-dim"}`}>
-                    {isSelected ? "当前已选中" : "点击选择"}
+                  <span className={`hidden md:inline text-[12px] font-medium ${isSelected ? "text-text" : "text-dim"}`}>
+                    {isSelected ? "已选中" : "选择"}
                   </span>
                 </div>
 
@@ -370,83 +361,66 @@ export default function Home() {
         )}
 
         {profile?.stats?.total_sessions > 0 && (
-          <SurfaceCard className="mt-4 px-4 py-4 md:px-5 md:py-5 border-border/80 bg-card/75">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="text-[15px] font-semibold text-text">当前状态与推荐起点</div>
-                  <div className="mt-1 text-[12px] leading-[1.7] text-dim">模式和起点一起决定本轮训练从哪里切入，不再拆成两个入口。</div>
-                </div>
-                <SubtleButton onClick={() => navigate("/profile")} className="py-1.5 text-[12px]">
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="rounded-2xl border border-border/70 bg-card/55 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-dim">
+                <span><span className="text-text font-medium">{stats.total_sessions || 0}</span> 次练习</span>
+                <span><span className="text-text font-medium">{stats.avg_score || "-"}</span> 综合平均</span>
+                <span><span className={`font-medium ${lastEntry?.avg_score >= 6 ? "text-green" : "text-orange"}`}>{lastEntry?.avg_score ?? "-"}</span> 上次得分</span>
+                <span>当前更该关注 <span className="text-text font-medium">{topTopics[0] ? (topics[topTopics[0][0]]?.name || topTopics[0][0]) : "等待更多练习"}</span></span>
+                <SubtleButton onClick={() => navigate("/profile")} className="ml-auto py-1 text-[12px]">
                   查看画像 <ChevronRight size={14} />
                 </SubtleButton>
               </div>
+            </div>
 
-              <div className="rounded-2xl border border-border/70 bg-card/55 px-4 py-3">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-dim">
-                  <span><span className="text-text font-medium">{stats.total_sessions || 0}</span> 次练习</span>
-                  <span><span className="text-text font-medium">{stats.avg_score || "-"}</span> 综合平均</span>
-                  <span><span className={`font-medium ${lastEntry?.avg_score >= 6 ? "text-green" : "text-orange"}`}>{lastEntry?.avg_score ?? "-"}</span> 上次得分</span>
-                  <span>当前更该关注 <span className="text-text font-medium">{topTopics[0] ? (topics[topTopics[0][0]]?.name || topTopics[0][0]) : "等待更多练习"}</span></span>
-                </div>
-              </div>
-
-              {primaryRecommendation && (
-                <div className="rounded-2xl border border-green/20 bg-green/5 px-4 py-4 md:px-5">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1.5 flex items-center gap-2 flex-wrap">
-                        <span className="text-[15px] font-semibold text-text">推荐起点</span>
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${recommendationBadge(primaryRecommendation.confidence)}`}>
-                          {primaryRecommendation.confidence === "high" ? "高置信推荐" : primaryRecommendation.confidence === "medium" ? "可尝试" : "探索建议"}
-                        </span>
-                        {primaryRecommendation.topic && <Badge tone="accent">{topics[primaryRecommendation.topic]?.name || primaryRecommendation.topic}</Badge>}
-                      </div>
-                      <div className="text-[14px] font-medium text-text">{primaryRecommendation.focus_label || primaryRecommendation.title}</div>
-                      {recommendationTrend && <div className="mt-1 text-[12px] font-medium text-accent-light">{recommendationActionText} · {recommendationTrend}</div>}
-                      <div className="mt-1 text-[12px] leading-[1.7] text-dim">
-                        {primaryRecommendation.why_now || primaryRecommendation.reason || "根据你的近期画像，优先从这个目标开始更划算。"}
-                        {recommendationSecondaryHint ? ` ${recommendationSecondaryHint}` : ""}
-                      </div>
+            {primaryRecommendation && (
+              <div className="rounded-2xl border border-green/20 bg-green/5 px-4 py-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-[13px] font-semibold text-text">系统建议从这里开始</span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${recommendationBadge(primaryRecommendation.confidence)}`}>
+                        {primaryRecommendation.confidence === "high" ? "高置信推荐" : primaryRecommendation.confidence === "medium" ? "可尝试" : "探索建议"}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {primaryRecommendation.topic && (
-                        <SubtleButton
-                          onClick={() => {
-                            setMode("topic_drill");
-                            setSelectedTopic(primaryRecommendation.topic);
-                            setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
-                            setQuickFocusLabel(primaryRecommendation.focus_label || "");
-                            setQuickFocusTrend(primaryRecommendation.trend_label || "");
-                            setPresetNotice("已应用推荐训练目标");
-                            setTimeout(() => scrollToSummary(), 100);
-                          }}
-                          className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light"
-                        >
-                          用它作为本轮起点
-                        </SubtleButton>
-                      )}
-                      {primaryRecommendation.topic && (
-                        <SubtleButton
-                          onClick={() => navigate("/knowledge", { state: { selectedTopic: primaryRecommendation.topic, searchKeyword: primaryRecommendation.pre_read_keyword || primaryRecommendation.focus_label } })}
-                          className="py-1.5 text-[12px]"
-                        >
-                          先看题库
-                        </SubtleButton>
-                      )}
+                    <div className="text-[13px] font-medium text-text">{primaryRecommendation.focus_label || primaryRecommendation.title}</div>
+                    <div className="mt-1 text-[12px] leading-[1.6] text-dim">
+                      {topics[primaryRecommendation.topic]?.name || primaryRecommendation.topic || "当前推荐专题"}
+                      {recommendationTrend ? ` · ${recommendationTrend}` : ""}
                     </div>
                   </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {primaryRecommendation.topic && (
+                      <SubtleButton
+                        onClick={() => {
+                          setMode("topic_drill");
+                          setSelectedTopic(primaryRecommendation.topic);
+                          setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
+                          setQuickFocusLabel(primaryRecommendation.focus_label || "");
+                          setQuickFocusTrend(primaryRecommendation.trend_label || "");
+                          setPresetNotice("已应用推荐训练目标");
+                          setTimeout(() => scrollToSummary(), 100);
+                        }}
+                        className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light"
+                      >
+                        采用推荐
+                      </SubtleButton>
+                    )}
+                    {primaryRecommendation.topic && (
+                      <SubtleButton
+                        onClick={() => navigate("/knowledge", { state: { selectedTopic: primaryRecommendation.topic, searchKeyword: primaryRecommendation.pre_read_keyword || primaryRecommendation.focus_label } })}
+                        className="py-1.5 text-[12px]"
+                      >
+                        先看题库
+                      </SubtleButton>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          </SurfaceCard>
+              </div>
+            )}
+          </div>
         )}
-
-        <div className="mt-4 flex justify-center">
-          <SubtleButton onClick={() => navigate("/recording")}>
-            录音复盘工具 <ChevronRight size={14} />
-          </SubtleButton>
-        </div>
 
         </AppSection>
 
@@ -454,7 +428,7 @@ export default function Home() {
         <AppSection
           title="2. 上传简历并开始"
           subtitle="上传后，系统会基于你的项目经历和技术栈生成更真实的模拟追问。"
-          className="w-full max-w-[700px]"
+          className="w-full"
         >
           <div ref={resumeSectionRef}>
           {resumeFile ? (
@@ -512,7 +486,7 @@ export default function Home() {
         <AppSection
           title="2. 选择训练专题并开始"
           subtitle="优先展示当前更值得先练的专题；如果你已经知道方向，也可以切换到分类视图。"
-          className="w-full max-w-[700px]"
+          className="w-full"
         >
           <div ref={topicSectionRef}>
             {(presetNotice || quickFocus || primaryRecommendation?.topic) && (
