@@ -545,6 +545,140 @@ function SoloRecordingReview({ topicsCovered, overall }) {
   const avgScore = overall?.avg_score || "-";
   return (
     <>
+      <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
+        <div className="text-lg font-semibold mb-3">录音复盘总览</div>
+        <div className="mb-2">
+          <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
+            {avgScore}
+          </span>
+          <span className="text-base text-dim">/10</span>
+        </div>
+        {overall?.summary && <div className="text-[14px] leading-[1.8] text-text mb-4">{overall.summary}</div>}
+        {topicsCovered?.length > 0 && (
+          <div>
+            <div className="text-[14px] font-semibold mb-2">涉及专题</div>
+            <div className="flex flex-wrap gap-2">
+              {topicsCovered.map((topic, idx) => (
+                <Badge key={`${topic}-${idx}`} tone="muted">{topicDisplayName(topic)}</Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <DimensionScores dimensionScores={overall?.dimension_scores} avgScore={overall?.avg_score} />
+    </>
+  );
+}
+
+function DrillReview({
+  sessionId,
+  scores,
+  overall,
+  questions,
+  answers,
+  topic,
+  topics,
+  persistedReferenceAnswers = {},
+  persistedReferenceFollowups = {},
+  persistedImprovedAnswers = {},
+}) {
+  const navigate = useNavigate();
+  const scoreMap = Object.fromEntries((scores || []).map((item) => [item.question_id, item]));
+  const answerMap = Object.fromEntries((answers || []).map((item) => [item.question_id, item.answer]));
+  const [refAnswers, setRefAnswers] = useState(persistedReferenceAnswers || {});
+  const [refLoading, setRefLoading] = useState({});
+  const [followupOpen, setFollowupOpen] = useState({});
+  const [followupInput, setFollowupInput] = useState({});
+  const [followupLoading, setFollowupLoading] = useState({});
+  const [improvedAnswers, setImprovedAnswers] = useState(persistedImprovedAnswers || {});
+  const [improvedLoading, setImprovedLoading] = useState({});
+  const [followupHistory, setFollowupHistory] = useState(() => {
+    const seeded = {};
+    Object.entries(persistedReferenceFollowups || {}).forEach(([key, items]) => {
+      const qid = String(key || "").startsWith("q:") ? Number(String(key).slice(2)) : null;
+      if (qid != null && !Number.isNaN(qid)) seeded[qid] = items || [];
+    });
+    return seeded;
+  });
+  const [showSummary, setShowSummary] = useState(true);
+
+  const questionItems = (questions || []).map((q) => {
+    const s = scoreMap[q.id] || {};
+    const answer = answerMap[q.id];
+    const isSkipped = !answer;
+    const numericScore = typeof s.score === "number" ? s.score : null;
+    const priority = [
+      isSkipped ? 0 : 1,
+      s.focus_hit ? 3 : 0,
+      numericScore != null ? Math.max(0, 10 - numericScore) : 0,
+      s.key_missing?.length || 0,
+      s.improved ? 0 : 0.5,
+    ].reduce((a, b) => a + b, 0);
+    return { q, s, answer, isSkipped, numericScore, priority };
+  });
+
+  const defaultQuestionId = questionItems.length
+    ? [...questionItems].sort((a, b) => b.priority - a.priority)[0]?.q?.id
+    : null;
+  const [activeQuestionId, setActiveQuestionId] = useState(defaultQuestionId);
+
+  useEffect(() => {
+    if (!questionItems.length) return;
+    if (!activeQuestionId || !questionItems.some((item) => item.q.id === activeQuestionId)) {
+      setActiveQuestionId(defaultQuestionId || questionItems[0]?.q?.id || null);
+    }
+  }, [questions, scores]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeIndex = questionItems.findIndex((item) => item.q.id === activeQuestionId);
+  const activeItem = activeIndex >= 0 ? questionItems[activeIndex] : questionItems[0] || null;
+  const avgScore = overall?.avg_score || (scores?.length ? (scores.reduce((sum, item) => sum + (item.score || 0), 0) / scores.length).toFixed(1) : "-");
+
+  const handleRefAnswer = async (questionId, question, regenerate = false) => {
+    try {
+      setRefLoading((prev) => ({ ...prev, [questionId]: true }));
+      const data = await getReferenceAnswer({ session_id: sessionId, question_id: questionId, question, regenerate });
+      setRefAnswers((prev) => ({ ...prev, [questionId]: data }));
+    } finally {
+      setRefLoading((prev) => ({ ...prev, [questionId]: false }));
+    }
+  };
+
+  const handleFollowup = async (questionId, question) => {
+    const followup = (followupInput[questionId] || "").trim();
+    if (!followup) return;
+    try {
+      setFollowupLoading((prev) => ({ ...prev, [questionId]: true }));
+      const data = await followupReferenceAnswer({ session_id: sessionId, question_id: questionId, question, followup });
+      setFollowupHistory((prev) => ({ ...prev, [questionId]: [...(prev[questionId] || []), data] }));
+      setFollowupInput((prev) => ({ ...prev, [questionId]: "" }));
+    } finally {
+      setFollowupLoading((prev) => ({ ...prev, [questionId]: false }));
+    }
+  };
+
+  const handleImprovedAnswer = async (questionId, question) => {
+    try {
+      setImprovedLoading((prev) => ({ ...prev, [questionId]: true }));
+      const data = await getImprovedAnswer({ session_id: sessionId, question_id: questionId, question });
+      setImprovedAnswers((prev) => ({ ...prev, [questionId]: data }));
+    } finally {
+      setImprovedLoading((prev) => ({ ...prev, [questionId]: false }));
+    }
+  };
+
+  const handlePracticeImprovedAnswer = (questionId, question, focusArea) => {
+    navigate("/", {
+      state: {
+        quickStartMode: "topic_drill",
+        quickStartTopic: topic,
+        quickStartPrompt: improvedAnswers[questionId]?.improved_answer || question,
+        quickStartFocus: focusArea || "",
+      },
+    });
+  };
+
+  return (
+    <>
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
         <SectionTitle className="mb-0">复盘阅读器</SectionTitle>
         <SubtleButton onClick={() => setShowSummary((v) => !v)} className="px-3 py-2 text-[12px]">
@@ -565,61 +699,12 @@ function SoloRecordingReview({ topicsCovered, overall }) {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
-                共 {questions?.length || 0} 题
-              </span>
-              <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">
-                已答 {answers?.filter((a) => a.answer).length || 0} 题
-              </span>
-              {overall?.targeting_stats?.focus_label && (
-                <span className="inline-flex items-center rounded-lg bg-green/10 px-3.5 py-1.5 text-[13px] font-medium text-green">
-                  本轮 focus：{overall.targeting_stats.focus_label}
-                </span>
-              )}
+              <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">共 {questions?.length || 0} 题</span>
+              <span className="inline-flex items-center rounded-lg bg-hover px-3.5 py-1.5 text-[13px] font-medium text-dim">已答 {answers?.filter((a) => a.answer).length || 0} 题</span>
+              {overall?.targeting_stats?.focus_label && <span className="inline-flex items-center rounded-lg bg-green/10 px-3.5 py-1.5 text-[13px] font-medium text-green">本轮 focus：{overall.targeting_stats.focus_label}</span>}
             </div>
           </div>
-
-          {overall?.summary && (
-            <div className="text-[14px] leading-[1.8] text-text mb-4">{overall.summary}</div>
-          )}
-
-          {overall?.targeting_stats && (
-            <div className="flex flex-wrap gap-3 mb-4">
-              <Badge tone="muted">命中率 {(overall.targeting_stats.hit_rate * 100).toFixed(0)}%</Badge>
-              <Badge tone="muted">修复率 {(overall.targeting_stats.repair_rate * 100).toFixed(0)}%</Badge>
-              <Badge tone="muted">前3题命中高优先级点 {overall.targeting_stats.front3_high_priority_hits || 0} 次</Badge>
-              {overall.targeting_stats.focus_label && (
-                <Badge tone="green">focus 命中率 {((overall.targeting_stats.focus_hit_rate || 0) * 100).toFixed(0)}%</Badge>
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {overall?.new_weak_points?.length > 0 && (
-              <div>
-                <div className="text-[14px] font-semibold mb-2">薄弱点</div>
-                <div className="flex flex-col gap-1.5">
-                  {overall.new_weak_points.slice(0, 4).map((wp, i) => (
-                    <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-red/8 border border-red/20">
-                      {typeof wp === "string" ? wp : wp.point || JSON.stringify(wp)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {overall?.new_strong_points?.length > 0 && (
-              <div>
-                <div className="text-[14px] font-semibold mb-2">亮点</div>
-                <div className="flex flex-col gap-1.5">
-                  {overall.new_strong_points.slice(0, 4).map((sp, i) => (
-                    <div key={i} className="px-3 py-2 rounded-lg text-[13px] text-text bg-green/8 border border-green/20">
-                      {typeof sp === "string" ? sp : sp.point || JSON.stringify(sp)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {overall?.summary && <div className="text-[14px] leading-[1.8] text-text mb-4">{overall.summary}</div>}
         </div>
       )}
 
@@ -643,25 +728,16 @@ function SoloRecordingReview({ topicsCovered, overall }) {
                     const active = item.q.id === activeQuestionId;
                     const low = score != null && score < 6;
                     return (
-                      <button
-                        key={item.q.id}
-                        type="button"
-                        onClick={() => setActiveQuestionId(item.q.id)}
-                        className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${active ? "border-accent bg-accent/10 shadow-[0_0_0_1px_rgba(245,158,11,0.12)]" : "border-border bg-card hover:border-accent/30"}`}
-                      >
+                      <button key={item.q.id} type="button" onClick={() => setActiveQuestionId(item.q.id)} className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${active ? "border-accent bg-accent/10 shadow-[0_0_0_1px_rgba(245,158,11,0.12)]" : "border-border bg-card hover:border-accent/30"}`}>
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <span className={`text-[13px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{item.q.id}</span>
                           <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            {score != null && (
-                              <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>
-                            )}
+                            {score != null && <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>}
                             {item.s.focus_hit && <span className="text-[10px] rounded bg-green/10 px-1.5 py-0.5 text-green">focus</span>}
                             {item.isSkipped && <span className="text-[10px] rounded bg-hover px-1.5 py-0.5 text-dim">未作答</span>}
                           </div>
                         </div>
-                        <div className="text-[11px] leading-[1.6] text-dim line-clamp-2">
-                          {item.isSkipped ? item.q.question : (item.s.weak_point || item.q.focus_area || item.q.question)}
-                        </div>
+                        <div className="text-[11px] leading-[1.6] text-dim line-clamp-2">{item.isSkipped ? item.q.question : (item.s.weak_point || item.q.focus_area || item.q.question)}</div>
                       </button>
                     );
                   })}
@@ -686,27 +762,14 @@ function SoloRecordingReview({ topicsCovered, overall }) {
                   <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{q.id}</span>
-                      <span className="text-xs px-2 py-0.5 rounded" style={{ background: tb.bg, color: tb.color }} title={q.training_intent || q.training_label}>
-                        {tb.label}
-                      </span>
-                      {q.focus_area && (
-                        <button
-                          onClick={() => topic && navigate(`/profile/topic/${topic}`)}
-                          className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer"
-                        >
-                          {q.focus_area}
-                        </button>
-                      )}
+                      <span className="text-xs px-2 py-0.5 rounded" style={{ background: tb.bg, color: tb.color }} title={q.training_intent || q.training_label}>{tb.label}</span>
+                      {q.focus_area && <button onClick={() => topic && navigate(`/profile/topic/${topic}`)} className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer">{q.focus_area}</button>}
                     </div>
-                    <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
-                      {numericScore ?? "-"}/10
-                    </span>
+                    <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>{numericScore ?? "-"}/10</span>
                   </div>
 
                   <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
-                  {q.training_intent && (
-                    <div className="mb-3 text-[12px] text-dim leading-[1.7]">训练意图：{q.training_intent}</div>
-                  )}
+                  {q.training_intent && <div className="mb-3 text-[12px] text-dim leading-[1.7]">训练意图：{q.training_intent}</div>}
 
                   {isSkipped ? (
                     <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
@@ -716,63 +779,17 @@ function SoloRecordingReview({ topicsCovered, overall }) {
                         <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
                         <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
                       </div>
-
-                      {s.assessment && s.assessment !== "未作答" && (
-                        <div className="text-sm leading-[1.7] text-text mb-2">
-                          <strong className="text-xs opacity-60">点评: </strong>{s.assessment}
-                        </div>
-                      )}
-
-                      {s.improvement && (
-                        <div className="text-sm leading-[1.7] text-accent-light bg-accent/8 rounded-lg px-3 py-2.5 md:px-3.5 mb-2">
-                          <strong className="text-xs opacity-70">改进建议: </strong>{s.improvement}
-                        </div>
-                      )}
-
-                      {s.understanding && s.understanding !== "未作答" && (
-                        <div className="text-[13px] text-dim italic mt-1">理解程度: {s.understanding}</div>
-                      )}
-
-                      {s.key_missing?.length > 0 && (
-                        <div className="text-[13px] text-red leading-normal">遗漏关键点: {s.key_missing.join("、")}</div>
-                      )}
-
+                      {s.assessment && s.assessment !== "未作答" && <div className="text-sm leading-[1.7] text-text mb-2"><strong className="text-xs opacity-60">点评: </strong>{s.assessment}</div>}
+                      {s.improvement && <div className="text-sm leading-[1.7] text-accent-light bg-accent/8 rounded-lg px-3 py-2.5 md:px-3.5 mb-2"><strong className="text-xs opacity-70">改进建议: </strong>{s.improvement}</div>}
+                      {s.understanding && s.understanding !== "未作答" && <div className="text-[13px] text-dim italic mt-1">理解程度: {s.understanding}</div>}
+                      {s.key_missing?.length > 0 && <div className="text-[13px] text-red leading-normal">遗漏关键点: {s.key_missing.join("、")}</div>}
                       {s.weak_point && (
                         <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
                           <span>薄弱点标签: {s.weak_point}</span>
-                          {s.semantic_bucket && topic && (
-                            <button
-                              onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })}
-                              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
-                              title={s.semantic_bucket}
-                            >
-                              {bucketLabel(s.semantic_bucket)}
-                            </button>
-                          )}
-                          {topic && (
-                            <button
-                              onClick={() => navigate(`/profile/topic/${topic}`)}
-                              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer"
-                            >
-                              看专题
-                            </button>
-                          )}
-                          {topic && (
-                            <button
-                              onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })}
-                              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-hover text-dim border-none cursor-pointer"
-                            >
-                              先看题库
-                            </button>
-                          )}
-                          {topic && (
-                            <button
-                              onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })}
-                              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer"
-                            >
-                              去修复
-                            </button>
-                          )}
+                          {s.semantic_bucket && topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer" title={s.semantic_bucket}>{bucketLabel(s.semantic_bucket)}</button>}
+                          {topic && <button onClick={() => navigate(`/profile/topic/${topic}`)} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer">看专题</button>}
+                          {topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-hover text-dim border-none cursor-pointer">先看题库</button>}
+                          {topic && <button onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer">去修复</button>}
                         </div>
                       )}
 
@@ -783,60 +800,28 @@ function SoloRecordingReview({ topicsCovered, overall }) {
                           {refAnswers[q.id]?.reference_answer ? (
                             <div className="text-sm leading-[1.8]">
                               <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
-                                <span className="flex items-center gap-1.5">
-                                  <BookOpen size={13} /> 标准参考答案
-                                </span>
+                                <span className="flex items-center gap-1.5"><BookOpen size={13} /> 标准参考答案</span>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  {refAnswers[q.id]?.generated_at && (
-                                    <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
-                                  )}
-                                  <button
-                                    className="text-[12px] text-dim bg-transparent border-none cursor-pointer"
-                                    onClick={() => handleRefAnswer(q.id, q.question, true)}
-                                    disabled={refLoading[q.id]}
-                                  >
-                                    {refLoading[q.id] ? "重新生成中..." : "重新生成"}
-                                  </button>
+                                  {refAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
+                                  <button className="text-[12px] text-dim bg-transparent border-none cursor-pointer" onClick={() => handleRefAnswer(q.id, q.question, true)} disabled={refLoading[q.id]}>{refLoading[q.id] ? "重新生成中..." : "重新生成"}</button>
                                 </div>
                               </div>
-                              <div className="md-content bg-hover rounded-lg px-3.5 py-3">
-                                <ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown>
-                              </div>
+                              <div className="md-content bg-hover rounded-lg px-3.5 py-3"><ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown></div>
 
                               <div className="mt-3 flex flex-wrap gap-2">
-                                <button
-                                  className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
-                                  onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}
-                                >
-                                  <BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}
-                                </button>
-                                <button
-                                  className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50"
-                                  onClick={() => handleImprovedAnswer(q.id, q.question)}
-                                  disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}
-                                >
-                                  <BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}
-                                </button>
+                                <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}><BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}</button>
+                                <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50" onClick={() => handleImprovedAnswer(q.id, q.question)} disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}><BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}</button>
                               </div>
 
                               {improvedAnswers[q.id]?.improved_answer && (
                                 <div className="mt-3 rounded-lg border border-green/20 bg-green/5 px-3 py-3">
                                   <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
                                     <span>我的改进版答案</span>
-                                    {improvedAnswers[q.id]?.generated_at && (
-                                      <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>
-                                    )}
+                                    {improvedAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
                                   </div>
-                                  <div className="md-content rounded-lg bg-card px-3.5 py-3">
-                                    <ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown>
-                                  </div>
+                                  <div className="md-content rounded-lg bg-card px-3.5 py-3"><ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown></div>
                                   <div className="mt-3 flex flex-wrap gap-2">
-                                    <button
-                                      className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer"
-                                      onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}
-                                    >
-                                      <BookOpen size={13} /> 带着这版再练一遍
-                                    </button>
+                                    <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}><BookOpen size={13} /> 带着这版再练一遍</button>
                                   </div>
                                 </div>
                               )}
@@ -846,38 +831,13 @@ function SoloRecordingReview({ topicsCovered, overall }) {
                                   <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
                                   <div className="flex flex-wrap gap-2 mb-2.5">
                                     {FOLLOWUP_QUICK_ACTIONS.map((item) => (
-                                      <button
-                                        key={item.label}
-                                        className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer"
-                                        onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))}
-                                        type="button"
-                                      >
-                                        {item.label}
-                                      </button>
+                                      <button key={item.label} className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer" onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))} type="button">{item.label}</button>
                                     ))}
                                   </div>
-                                  <textarea
-                                    className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none"
-                                    placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子"
-                                    value={followupInput[q.id] || ""}
-                                    onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))}
-                                  />
+                                  <textarea className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none" placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子" value={followupInput[q.id] || ""} onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))} />
                                   <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                    <button
-                                      className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50"
-                                      onClick={() => handleFollowup(q.id, q.question)}
-                                      disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}
-                                    >
-                                      {followupLoading[q.id] ? "AI 思考中..." : "发送追问"}
-                                    </button>
-                                    <button
-                                      className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer"
-                                      onClick={() => {
-                                        setFollowupInput((p) => ({ ...p, [q.id]: "" }));
-                                      }}
-                                    >
-                                      清空输入
-                                    </button>
+                                    <button className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50" onClick={() => handleFollowup(q.id, q.question)} disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}>{followupLoading[q.id] ? "AI 思考中..." : "发送追问"}</button>
+                                    <button className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer" onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: "" }))}>清空输入</button>
                                   </div>
                                   {followupHistory[q.id]?.length > 0 && (
                                     <div className="mt-3">
@@ -888,12 +848,8 @@ function SoloRecordingReview({ topicsCovered, overall }) {
                                             <div className="text-[12px] font-semibold text-accent-light mb-1">你追问</div>
                                             <div className="text-sm leading-[1.7] whitespace-pre-wrap">{item.followup}</div>
                                             <div className="text-[12px] font-semibold text-dim mt-3 mb-1">AI 回答</div>
-                                            <div className="md-content">
-                                              <ReactMarkdown>{item.answer || ""}</ReactMarkdown>
-                                            </div>
-                                            {item.created_at && (
-                                              <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>
-                                            )}
+                                            <div className="md-content"><ReactMarkdown>{item.answer || ""}</ReactMarkdown></div>
+                                            {item.created_at && <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>}
                                           </div>
                                         ))}
                                       </div>
@@ -903,14 +859,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
                               )}
                             </div>
                           ) : (
-                            <button
-                              className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50"
-                              onClick={() => handleRefAnswer(q.id, q.question)}
-                              disabled={refLoading[q.id]}
-                            >
-                              <BookOpen size={13} />
-                              {refLoading[q.id] ? "正在生成参考答案..." : "查看标准参考答案"}
-                            </button>
+                            <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50" onClick={() => handleRefAnswer(q.id, q.question)} disabled={refLoading[q.id]}><BookOpen size={13} />{refLoading[q.id] ? "正在生成参考答案..." : "查看标准参考答案"}</button>
                           )}
                         </div>
                       )}
@@ -919,21 +868,9 @@ function SoloRecordingReview({ topicsCovered, overall }) {
                 </div>
 
                 <div className="flex items-center justify-between gap-3">
-                  <OutlineButton
-                    onClick={() => activeIndex > 0 && setActiveQuestionId(questionItems[activeIndex - 1].q.id)}
-                    disabled={activeIndex <= 0}
-                    className="px-3 py-2 text-[12px] disabled:opacity-40"
-                  >
-                    上一题
-                  </OutlineButton>
+                  <OutlineButton onClick={() => activeIndex > 0 && setActiveQuestionId(questionItems[activeIndex - 1].q.id)} disabled={activeIndex <= 0} className="px-3 py-2 text-[12px] disabled:opacity-40">上一题</OutlineButton>
                   <div className="text-[12px] text-dim">第 {activeIndex + 1} / {questionItems.length} 题</div>
-                  <OutlineButton
-                    onClick={() => activeIndex < questionItems.length - 1 && setActiveQuestionId(questionItems[activeIndex + 1].q.id)}
-                    disabled={activeIndex >= questionItems.length - 1}
-                    className="px-3 py-2 text-[12px] disabled:opacity-40"
-                  >
-                    下一题
-                  </OutlineButton>
+                  <OutlineButton onClick={() => activeIndex < questionItems.length - 1 && setActiveQuestionId(questionItems[activeIndex + 1].q.id)} disabled={activeIndex >= questionItems.length - 1} className="px-3 py-2 text-[12px] disabled:opacity-40">下一题</OutlineButton>
                 </div>
               </div>
             </div>
