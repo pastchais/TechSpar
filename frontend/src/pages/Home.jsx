@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FileText, ChevronRight, Mic } from "lucide-react";
 import TopicCard from "../components/TopicCard";
@@ -33,6 +33,8 @@ export default function Home() {
   const [quickFocusTrend, setQuickFocusTrend] = useState("");
   const [presetNotice, setPresetNotice] = useState("");
   const [summaryFlash, setSummaryFlash] = useState(false);
+  const [showAllTopics, setShowAllTopics] = useState(false);
+  const [topicView, setTopicView] = useState("priority");
   const topicSectionRef = useRef(null);
   const summarySectionRef = useRef(null);
   const resumeSectionRef = useRef(null);
@@ -170,6 +172,43 @@ export default function Home() {
         : recommendationTrend === "波动明显"
           ? "这类 focus 还不够稳定，建议先固定结构，再做一轮验收型训练。"
           : null;
+
+  const getTopicCategory = (key, info) => {
+    const raw = `${key || ""} ${info?.name || ""}`.toLowerCase();
+    if (raw.includes("frontend") || raw.includes("react") || raw.includes("web") || raw.includes("前端")) return "前端";
+    if (raw.includes("backend") || raw.includes("api") || raw.includes("服务端") || raw.includes("后端")) return "后端";
+    if (raw.includes("db") || raw.includes("database") || raw.includes("sql") || raw.includes("数据")) return "数据";
+    if (raw.includes("system") || raw.includes("design") || raw.includes("架构")) return "系统设计";
+    if (raw.includes("network") || raw.includes("infra") || raw.includes("cloud") || raw.includes("deploy") || raw.includes("运维") || raw.includes("网络")) return "基础设施";
+    return "其他";
+  };
+
+  const categoryOrder = ["前端", "后端", "数据", "系统设计", "基础设施", "其他"];
+  const categorizedTopics = useMemo(() => {
+    const groups = new Map();
+    categoryOrder.forEach((name) => groups.set(name, []));
+    rankedTopics.forEach(([key, info], idx) => {
+      const category = getTopicCategory(key, info);
+      groups.get(category)?.push({ key, info, idx });
+    });
+    return categoryOrder
+      .map((name) => ({ name, items: groups.get(name) || [] }))
+      .filter((group) => group.items.length > 0);
+  }, [rankedTopics]);
+
+  const priorityTopics = useMemo(() => {
+    const recommended = rankedTopics.filter(([key]) => key === recommendedTopicKey);
+    const topRanked = rankedTopics.slice(0, 6);
+    const merged = [...recommended, ...topRanked];
+    const seen = new Set();
+    return merged.filter(([key]) => {
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [rankedTopics, recommendedTopicKey]);
+
+  const visiblePriorityTopics = showAllTopics ? rankedTopics : priorityTopics;
   const modeMeta = {
     resume: {
       label: "简历模拟面试",
@@ -500,53 +539,135 @@ export default function Home() {
             )}
           </div>
           <div className="mb-3 rounded-2xl border border-border/70 bg-card/70 px-3 py-3 backdrop-blur-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="muted">按当前薄弱程度排序</Badge>
-              {recommendedTopicKey && <Badge tone="orange">橙色表示当前建议优先</Badge>}
-              <Badge tone="green">绿色表示当前已选中</Badge>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone="muted">按当前薄弱程度排序</Badge>
+                {recommendedTopicKey && <Badge tone="orange">橙色表示当前建议优先</Badge>}
+                <Badge tone="green">绿色表示当前已选中</Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <OutlineButton
+                  onClick={() => setTopicView("priority")}
+                  className={topicView === "priority" ? "border-accent/40 bg-accent/10" : ""}
+                >
+                  聚焦视图
+                </OutlineButton>
+                <OutlineButton
+                  onClick={() => setTopicView("category")}
+                  className={topicView === "category" ? "border-accent/40 bg-accent/10" : ""}
+                >
+                  分类视图
+                </OutlineButton>
+              </div>
             </div>
             <div className="mt-2 text-[11px] leading-[1.7] text-dim">
-              先快速扫一遍优先级与当前分数，再决定是否沿推荐切入点开始训练。
+              {topicView === "priority"
+                ? "默认只展示当前最值得先看的专题；如果需要，也可以展开全部。"
+                : "按专题类型分组浏览，更适合已经知道自己要练什么方向时使用。"}
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 mb-4">
-            {rankedTopics.map(([key, info], idx) => {
-              const isRecommendedTopic = key === recommendedTopicKey;
-              const isSelected = selectedTopic === key;
-              const masteryScore = mastery[key]?.score ?? null;
-              const cardFocusLabel = isRecommendedTopic ? (primaryRecommendation?.focus_label || "") : "";
-              const cardTrendLabel = isRecommendedTopic ? (primaryRecommendation?.trend_label || "") : "";
-              return (
-                <TopicCard
-                  key={key}
-                  topicKey={key}
-                  name={info.name || key}
-                  icon={info.icon}
-                  recommended={isRecommendedTopic}
-                  selected={isSelected}
-                  score={masteryScore}
-                  focusLabel={cardFocusLabel}
-                  trendLabel={cardTrendLabel}
-                  rank={idx < 3 ? idx : null}
-                  onClick={() => {
-                    setSelectedTopic(key);
-                    if (primaryRecommendation?.topic === key) {
-                      setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
-                      setQuickFocusLabel(primaryRecommendation.focus_label || "");
-                      setQuickFocusTrend(primaryRecommendation.trend_label || "");
-                      setPresetNotice("已应用推荐训练目标");
-                    } else {
-                      setQuickFocus("");
-                      setQuickFocusLabel("");
-                      setQuickFocusTrend("");
-                      setPresetNotice("");
-                    }
-                    setTimeout(() => scrollToSummary(), 100);
-                  }}
-                />
-              );
-            })}
-          </div>
+
+          {topicView === "priority" ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 mb-4">
+                {visiblePriorityTopics.map(([key, info]) => {
+                  const fullRank = rankedTopics.findIndex(([topicKey]) => topicKey === key);
+                  const isRecommendedTopic = key === recommendedTopicKey;
+                  const isSelected = selectedTopic === key;
+                  const masteryScore = mastery[key]?.score ?? null;
+                  const cardFocusLabel = isRecommendedTopic ? (primaryRecommendation?.focus_label || "") : "";
+                  const cardTrendLabel = isRecommendedTopic ? (primaryRecommendation?.trend_label || "") : "";
+                  return (
+                    <TopicCard
+                      key={key}
+                      topicKey={key}
+                      name={info.name || key}
+                      icon={info.icon}
+                      recommended={isRecommendedTopic}
+                      selected={isSelected}
+                      score={masteryScore}
+                      focusLabel={cardFocusLabel}
+                      trendLabel={cardTrendLabel}
+                      rank={fullRank < 3 ? fullRank : null}
+                      onClick={() => {
+                        setSelectedTopic(key);
+                        if (primaryRecommendation?.topic === key) {
+                          setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
+                          setQuickFocusLabel(primaryRecommendation.focus_label || "");
+                          setQuickFocusTrend(primaryRecommendation.trend_label || "");
+                          setPresetNotice("已应用推荐训练目标");
+                        } else {
+                          setQuickFocus("");
+                          setQuickFocusLabel("");
+                          setQuickFocusTrend("");
+                          setPresetNotice("");
+                        }
+                        setTimeout(() => scrollToSummary(), 100);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              {rankedTopics.length > priorityTopics.length && (
+                <div className="mb-4 flex justify-center">
+                  <SubtleButton onClick={() => setShowAllTopics((v) => !v)}>
+                    {showAllTopics ? "收起到高优先专题" : `展开全部专题（共 ${rankedTopics.length} 个）`}
+                  </SubtleButton>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="space-y-5 mb-4">
+              {categorizedTopics.map((group) => (
+                <div key={group.name} className="rounded-2xl border border-border/70 bg-card/60 px-3 py-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="text-[14px] font-semibold text-text">{group.name}</div>
+                      <Badge tone="muted">{group.items.length} 个专题</Badge>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+                    {group.items.map(({ key, info, idx }) => {
+                      const isRecommendedTopic = key === recommendedTopicKey;
+                      const isSelected = selectedTopic === key;
+                      const masteryScore = mastery[key]?.score ?? null;
+                      const cardFocusLabel = isRecommendedTopic ? (primaryRecommendation?.focus_label || "") : "";
+                      const cardTrendLabel = isRecommendedTopic ? (primaryRecommendation?.trend_label || "") : "";
+                      return (
+                        <TopicCard
+                          key={key}
+                          topicKey={key}
+                          name={info.name || key}
+                          icon={info.icon}
+                          recommended={isRecommendedTopic}
+                          selected={isSelected}
+                          score={masteryScore}
+                          focusLabel={cardFocusLabel}
+                          trendLabel={cardTrendLabel}
+                          rank={idx < 3 ? idx : null}
+                          onClick={() => {
+                            setSelectedTopic(key);
+                            if (primaryRecommendation?.topic === key) {
+                              setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
+                              setQuickFocusLabel(primaryRecommendation.focus_label || "");
+                              setQuickFocusTrend(primaryRecommendation.trend_label || "");
+                              setPresetNotice("已应用推荐训练目标");
+                            } else {
+                              setQuickFocus("");
+                              setQuickFocusLabel("");
+                              setQuickFocusTrend("");
+                              setPresetNotice("");
+                            }
+                            setTimeout(() => scrollToSummary(), 100);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {selectedTopic && (
             <div className="mb-8 rounded-2xl border border-border bg-card px-4 py-4 md:px-5">
