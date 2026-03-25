@@ -202,7 +202,11 @@ function PracticeComparisonCard({ comparison }) {
   );
 }
 
-function QuestionSummaryStrip({
+function QuestionHeaderPanel({
+  question,
+  topic,
+  navigate,
+  trainingBadge,
   questionId,
   index,
   total,
@@ -215,8 +219,8 @@ function QuestionSummaryStrip({
   const sc = numericScore != null ? getScoreColor(numericScore) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
 
   return (
-    <SurfaceCard className="mb-3 px-4 py-3 sticky top-2 z-[1] bg-card/70 border-border/70">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+    <SurfaceCard className="px-4 py-3.5 md:px-5 md:py-4 sticky top-2 z-[1] bg-card/75 border-border/70">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <Badge tone="accent">当前查看 Q{questionId}</Badge>
@@ -233,6 +237,19 @@ function QuestionSummaryStrip({
             {numericScore ?? "-"}/10
           </span>
         </div>
+      </div>
+
+      <div className="border-t border-border/60 pt-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{question.id}</span>
+            <span className="text-xs px-2 py-0.5 rounded" style={{ background: trainingBadge.bg, color: trainingBadge.color }} title={question.training_intent || question.training_label}>{trainingBadge.label}</span>
+            {question.focus_area && <button onClick={() => topic && navigate(`/profile/topic/${topic}`)} className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer">{question.focus_area}</button>}
+          </div>
+          <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>{numericScore ?? "-"}/10</span>
+        </div>
+
+        <div className="text-[15px] font-medium leading-relaxed">{question.question}</div>
       </div>
     </SurfaceCard>
   );
@@ -292,19 +309,6 @@ function QuestionListItemCard({ item, index, active, mobile = false, onClick }) 
         </div>
       </div>
     </button>
-  );
-}
-
-function QuestionMetaRow({ question, topic, navigate, trainingBadge, scoreBadge }) {
-  return (
-    <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{question.id}</span>
-        <span className="text-xs px-2 py-0.5 rounded" style={{ background: trainingBadge.bg, color: trainingBadge.color }} title={question.training_intent || question.training_label}>{trainingBadge.label}</span>
-        {question.focus_area && <button onClick={() => topic && navigate(`/profile/topic/${topic}`)} className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer">{question.focus_area}</button>}
-      </div>
-      <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: scoreBadge.bg, color: scoreBadge.color }}>{scoreBadge.text}</span>
-    </div>
   );
 }
 
@@ -950,8 +954,12 @@ function DrillReview({
                 </div>
               </SurfaceCard>
 
-              <div>
-                <QuestionSummaryStrip
+              <div className="space-y-3">
+                <QuestionHeaderPanel
+                  question={q}
+                  topic={topic}
+                  navigate={navigate}
+                  trainingBadge={tb}
                   questionId={q.id}
                   index={activeIndex}
                   total={questionItems.length}
@@ -962,21 +970,7 @@ function DrillReview({
                   guidance={guidance}
                 />
 
-                <SurfaceCard className="px-4 py-4 md:px-5 mb-4 animate-fade-in">
-                  <QuestionMetaRow
-                    question={q}
-                    topic={topic}
-                    navigate={navigate}
-                    trainingBadge={tb}
-                    scoreBadge={{ bg: sc.bg, color: sc.color, text: `${numericScore ?? "-"}/10` }}
-                  />
-
-                  <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
-
-                  <div className="mb-3 rounded-xl border border-border/70 bg-hover/60 px-3 py-2.5 text-[13px] leading-[1.7] text-dim">
-                    {guidance}
-                  </div>
-
+                <SurfaceCard className="px-4 py-4 md:px-5 animate-fade-in">
                   {isSkipped ? (
                     <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
                   ) : (
