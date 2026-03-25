@@ -913,7 +913,7 @@ function DrillReview({
 
         return (
           <SurfaceCard className="mb-4 p-3 md:p-4 bg-card/80">
-            <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] items-start gap-4">
               <SurfaceCard className="p-3 md:p-4 bg-card/60 border-border/60">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
@@ -954,7 +954,7 @@ function DrillReview({
                 </div>
               </SurfaceCard>
 
-              <div className="space-y-3">
+              <div className="space-y-3 self-start">
                 <QuestionHeaderPanel
                   question={q}
                   topic={topic}
