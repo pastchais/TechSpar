@@ -947,7 +947,7 @@ function DrillReview({
         return (
           <div className="mb-4 p-3 md:p-4">
             <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] items-start gap-4">
-              <SurfaceCard className="p-3 md:p-4 bg-card/60 border-border/60">
+              <SurfaceCard className="p-3 md:p-4 bg-card/60 border-border/60 lg:sticky lg:top-24 self-start">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
                     <div className="text-[14px] font-semibold text-text">题目目录</div>
