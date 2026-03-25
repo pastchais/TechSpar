@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { FileText, ChevronRight, Mic } from "lucide-react";
 import TopicCard from "../components/TopicCard";
 import { getTopics, startInterview, getResumeStatus, uploadResume, getProfile } from "../api/interview";
-import { Badge, SubtleButton, SectionTitle } from "../components/ui.jsx";
+import { Badge, SubtleButton, SectionTitle, OutlineButton } from "../components/ui.jsx";
 
 function recommendationBadge(confidence) {
   if (confidence === "high") return "bg-green/10 text-green";
@@ -136,6 +136,7 @@ export default function Home() {
   const primaryRecommendation = (profile?.mini_training_plan || [])[0] || (profile?.next_focus_recommendations || [])[0] || null;
   const recommendedTopicKey = primaryRecommendation?.topic || null;
   const selectedTopicInfo = selectedTopic ? topics[selectedTopic] : null;
+  const selectedMastery = selectedTopic ? mastery[selectedTopic] : null;
   const currentStrategyLabel = primaryRecommendation?.adaptive_strategy === "repair"
     ? "攻坚"
     : primaryRecommendation?.adaptive_strategy === "advance"
@@ -480,7 +481,7 @@ export default function Home() {
           <div className="flex justify-between items-center gap-3 mb-4 flex-wrap">
             <div>
               <div className="text-lg font-semibold text-left">选择或调整训练专题</div>
-              <div className="mt-1 text-[12px] text-dim">点击专题卡片即可选择。</div>
+              <div className="mt-1 text-[12px] text-dim">先快速选专题，详细说明会在下方展开。</div>
             </div>
             {primaryRecommendation?.topic && !selectedTopic && (
               <button
@@ -498,54 +499,95 @@ export default function Home() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 mb-8">
-            {rankedTopics.map(([key, info], idx) => {
+          <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 mb-4">
+            {rankedTopics.map(([key, info]) => {
               const isRecommendedTopic = key === recommendedTopicKey;
               const isSelected = selectedTopic === key;
               return (
-                <div
+                <TopicCard
                   key={key}
-                  className={`rounded-2xl transition-all overflow-hidden ${isRecommendedTopic ? "ring-1 ring-orange/30 bg-orange/5" : ""} ${isSelected ? "shadow-[0_0_0_1px_rgba(34,197,94,0.25)]" : ""}`}
-                >
-                  {isRecommendedTopic && (
-                    <div className="px-3 pt-3 pb-1 flex justify-end">
-                      <div className="max-w-full px-2 py-0.5 rounded text-[10px] leading-4 font-medium bg-orange/15 text-orange break-words">
-                        {isSelected ? "已按推荐选中" : "建议优先训练"}
-                      </div>
-                    </div>
-                  )}
-                  <TopicCard
-                    topicKey={key}
-                    name={info.name || key}
-                    icon={info.icon}
-                    selected={isSelected}
-                    onClick={() => {
-                      setSelectedTopic(key);
-                      if (primaryRecommendation?.topic === key) {
-                        setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
-                        setQuickFocusLabel(primaryRecommendation.focus_label || "");
-                        setQuickFocusTrend(primaryRecommendation.trend_label || "");
-                        setPresetNotice("已应用推荐训练目标");
-                      } else {
-                        setQuickFocus("");
-                        setQuickFocusLabel("");
-                        setQuickFocusTrend("");
-                        setPresetNotice("");
-                      }
-                      setTimeout(() => scrollToSummary(), 100);
-                    }}
-                  />
-                  {isRecommendedTopic && (
-                    <div className="px-3 pb-3 pt-1">
-                      <div className="rounded-lg bg-orange/8 px-2.5 py-2 text-[11px] leading-[1.7] break-words text-dim">
-                        推荐原因：{primaryRecommendation?.focus_label ? `可从「${primaryRecommendation.focus_label}」切入。` : "这是你当前更该优先修复的专题。"}{recommendationTrend ? ` 当前轨迹：${recommendationTrend}。` : ""}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  topicKey={key}
+                  name={info.name || key}
+                  icon={info.icon}
+                  recommended={isRecommendedTopic}
+                  selected={isSelected}
+                  onClick={() => {
+                    setSelectedTopic(key);
+                    if (primaryRecommendation?.topic === key) {
+                      setQuickFocus(primaryRecommendation.focus_keyword || primaryRecommendation.focus_label || "");
+                      setQuickFocusLabel(primaryRecommendation.focus_label || "");
+                      setQuickFocusTrend(primaryRecommendation.trend_label || "");
+                      setPresetNotice("已应用推荐训练目标");
+                    } else {
+                      setQuickFocus("");
+                      setQuickFocusLabel("");
+                      setQuickFocusTrend("");
+                      setPresetNotice("");
+                    }
+                    setTimeout(() => scrollToSummary(), 100);
+                  }}
+                />
               );
             })}
           </div>
+
+          {selectedTopic && (
+            <div className="mb-8 rounded-2xl border border-border bg-card px-4 py-4 md:px-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <div className="text-[16px] font-semibold text-text">已选择：{selectedTopicInfo?.name || selectedTopic}</div>
+                    <Badge tone="green">当前训练专题</Badge>
+                    {selectedTopic === recommendedTopicKey && <Badge tone="orange">推荐优先</Badge>}
+                  </div>
+                  <div className="text-[12px] leading-[1.7] text-dim">
+                    {quickFocusLabel || quickFocus
+                      ? `建议从「${quickFocusLabel || quickFocus}」切入，先做定向修复，再进入专题强化。`
+                      : selectedTopic === recommendedTopicKey
+                        ? `这是当前更值得优先处理的专题。${recommendationTrend ? ` 当前轨迹为「${recommendationTrend}」。` : ""}`
+                        : "你可以直接开始本专题训练，系统会围绕该主题持续追问。"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTopic && (
+                    <OutlineButton
+                      onClick={() => navigate("/knowledge", { state: { selectedTopic, searchKeyword: quickFocusLabel || quickFocus || "" } })}
+                      className="px-3 py-2 text-[12px]"
+                    >
+                      先看知识库
+                    </OutlineButton>
+                  )}
+                  <SubtleButton
+                    onClick={() => setTimeout(() => scrollToSummary(), 60)}
+                    className="px-3 py-2 text-[12px]"
+                  >
+                    查看开始配置
+                  </SubtleButton>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge tone="accent">模式：专项强化训练</Badge>
+                {quickFocusLabel || quickFocus ? (
+                  <Badge tone="orange" title={quickFocusLabel || quickFocus}>重点：{quickFocusLabel || quickFocus}</Badge>
+                ) : (
+                  <Badge tone="muted">重点：进入专题后自动追问</Badge>
+                )}
+                {currentStrategyLabel && <Badge tone="muted">训练意图：{currentStrategyLabel}</Badge>}
+                {selectedMastery?.score != null && <Badge tone="muted">当前分数：{Math.round(selectedMastery.score)}/100</Badge>}
+              </div>
+
+              {(selectedTopic === recommendedTopicKey || quickFocusLabel || quickFocus) && (
+                <div className="mt-4 rounded-xl bg-orange/8 px-3 py-3 text-[12px] leading-[1.8] text-dim">
+                  <span className="font-medium text-text">训练建议：</span>
+                  {quickFocusLabel || quickFocus
+                    ? `先围绕「${quickFocusLabel || quickFocus}」做一轮针对性修复。`
+                    : "优先从当前推荐专题开始。"}
+                  {recommendationSecondaryHint ? ` ${recommendationSecondaryHint}` : " 先用一轮训练确认真实薄弱点，再决定是否继续深入。"}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
