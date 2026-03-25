@@ -219,37 +219,42 @@ function QuestionHeaderPanel({
   const sc = numericScore != null ? getScoreColor(numericScore) : { bg: "var(--bg-hover)", color: "var(--text-dim)" };
 
   return (
-    <SurfaceCard className="px-4 py-3.5 md:px-5 md:py-4 sticky top-2 z-[1] bg-card/75 border-border/70">
-      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+    <SurfaceCard className="px-4 py-4 md:px-5 md:py-5 sticky top-2 z-[1] bg-card/85 border-border/70 backdrop-blur-sm">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap mb-2">
-            <Badge tone="accent">当前查看 Q{questionId}</Badge>
+          <div className="flex items-center gap-2 flex-wrap mb-2.5">
+            <Badge tone="accent">当前查看 · 第 {index + 1} / {total} 题</Badge>
+            <span className="text-xs px-2 py-0.5 rounded" style={{ background: trainingBadge.bg, color: trainingBadge.color }} title={question.training_intent || question.training_label}>{trainingBadge.label}</span>
             {focusHit && <Badge tone="green">命中本次 focus</Badge>}
             {numericScore != null && numericScore < 6 && <Badge tone="red">优先修复</Badge>}
             {hasImproved && <Badge tone="green">已有改进版答案</Badge>}
             {isSkipped && <Badge tone="muted">未作答</Badge>}
+            {question.focus_area && (
+              <button
+                onClick={() => topic && navigate(`/profile/topic/${topic}`)}
+                className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer"
+              >
+                {question.focus_area}
+              </button>
+            )}
           </div>
-          <div className="text-[13px] leading-[1.7] text-dim">{guidance}</div>
+
+          <div className="text-[16px] md:text-[17px] font-semibold leading-[1.75] text-text">
+            {question.question}
+          </div>
+
+          <div className="mt-2 text-[13px] leading-[1.7] text-dim">
+            {guidance}
+          </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-[12px] text-dim">第 {index + 1} / {total} 题</div>
-          <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>
+
+        <div className="shrink-0 rounded-xl px-3 py-2 text-right" style={{ background: sc.bg }}>
+          <div className="text-[11px] text-dim">本题得分</div>
+          <div className="mt-1 text-[18px] font-bold" style={{ color: sc.color }}>
             {numericScore ?? "-"}/10
-          </span>
-        </div>
-      </div>
-
-      <div className="border-t border-border/60 pt-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-2.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[13px] font-semibold text-accent-light bg-accent/12 px-2.5 py-0.5 rounded-md">Q{question.id}</span>
-            <span className="text-xs px-2 py-0.5 rounded" style={{ background: trainingBadge.bg, color: trainingBadge.color }} title={question.training_intent || question.training_label}>{trainingBadge.label}</span>
-            {question.focus_area && <button onClick={() => topic && navigate(`/profile/topic/${topic}`)} className="text-xs text-dim bg-hover px-2 py-0.5 rounded border-none cursor-pointer">{question.focus_area}</button>}
           </div>
-          <span className="text-sm font-bold px-3 py-1 rounded-lg" style={{ background: sc.bg, color: sc.color }}>{numericScore ?? "-"}/10</span>
+          <div className="mt-1 text-[11px] text-dim">Q{questionId}</div>
         </div>
-
-        <div className="text-[15px] font-medium leading-relaxed">{question.question}</div>
       </div>
     </SurfaceCard>
   );
@@ -1008,17 +1013,24 @@ function DrillReview({
                             <div className="text-sm leading-[1.8]">
                               {refAnswers[q.id]?.reference_answer ? (
                                 <>
-                                  <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
-                                    <span>标准参考答案</span>
+                                  <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
+                                    <div>
+                                      <div className="text-[13px] font-semibold text-text">标准参考答案</div>
+                                      <div className="mt-1 text-[12px] leading-[1.7] text-dim">这是更标准、更完整的一种答法，用来对照你这题缺失了什么。</div>
+                                    </div>
                                     <div className="flex items-center gap-2 flex-wrap">
                                       {refAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
                                       <button className="text-[12px] text-dim bg-transparent border-none cursor-pointer" onClick={() => handleRefAnswer(q.id, q.question, true)} disabled={refLoading[q.id]}>{refLoading[q.id] ? "重新生成中..." : "重新生成"}</button>
                                     </div>
                                   </div>
-                                  <div className="md-content bg-hover rounded-xl px-3.5 py-3"><ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown></div>
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}><BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}</button>
-                                    <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50" onClick={() => handleImprovedAnswer(q.id, q.question)} disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}><BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}</button>
+                                  <div className="md-content rounded-2xl border border-border/70 bg-card px-4 py-4 md:px-5 md:py-4"><ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown></div>
+                                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <PrimaryButton onClick={() => handleImprovedAnswer(q.id, q.question)} disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer} className="px-4 py-2 text-[13px]">
+                                      <BookOpen size={14} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}
+                                    </PrimaryButton>
+                                    <SubtleButton onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))} className="px-3 py-2 text-[12px]">
+                                      <BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}
+                                    </SubtleButton>
                                   </div>
                                 </>
                               ) : refLoading[q.id] ? (
@@ -1041,13 +1053,18 @@ function DrillReview({
                               onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), improved: !!e.currentTarget?.open } }))}
                             >
                               <div>
-                                <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
-                                  <span>我的改进版答案</span>
+                                <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
+                                  <div>
+                                    <div className="text-[13px] font-semibold text-text">我的改进版答案</div>
+                                    <div className="mt-1 text-[12px] leading-[1.7] text-dim">这版更适合你直接拿去复练，不需要照抄标准答案的书面表达。</div>
+                                  </div>
                                   {improvedAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
                                 </div>
-                                <div className="md-content rounded-xl bg-card px-3.5 py-3"><ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown></div>
+                                <div className="md-content rounded-2xl border border-green/20 bg-card px-4 py-4 md:px-5 md:py-4"><ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown></div>
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                  <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}><BookOpen size={13} /> 带着这版再练一遍</button>
+                                  <PrimaryButton onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)} className="px-4 py-2 text-[13px]">
+                                    <BookOpen size={14} /> 带着这版再练一遍
+                                  </PrimaryButton>
                                 </div>
                               </div>
                             </ExpandableReviewSection>
