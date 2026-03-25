@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronRight, AlertTriangle, X } from "lucide-react";
 import { getProfile, getTopics, resetProfile } from "../api/interview";
 import { topicBadgeLabel, topicDisplayName } from "../utils/topicLabels";
-import { AppSection, Badge, PageTitle, PrimaryButton, SectionTitle, SubtleButton, SurfaceCard } from "../components/ui.jsx";
+import { AppSection, Badge, EmptyState, InsightCard, MetricCard, PageTitle, PanelHeader, PrimaryButton, SectionNav, SectionTitle, SubtleButton, SurfaceCard } from "../components/ui.jsx";
 
 function CollapsibleList({ items, limit, renderItem, renderExpandedItem, expandedLabel = "查看完整内容", expandedTitle = "完整展开" }) {
   const [expanded, setExpanded] = useState(false);
@@ -571,13 +571,12 @@ export default function Profile() {
     return (
       <div className="flex-1 px-4 py-8 md:px-6 md:py-10 max-w-3xl mx-auto w-full">
         <PageTitle title="个人画像" className="mb-2" />
-        <SurfaceCard className="mt-5 px-6 py-8 text-center text-dim">
-          <p>还没有面试数据</p>
-          <p className="mt-3 text-sm">开始面试后，系统会实时分析你的每个回答，自动构建你的能力画像</p>
-          <div className="mt-5 flex justify-center">
-            <PrimaryButton onClick={() => navigate("/")}>开始第一场面试</PrimaryButton>
-          </div>
-        </SurfaceCard>
+        <EmptyState
+          className="mt-5"
+          title="还没有面试数据"
+          description="开始面试后，系统会实时分析你的每个回答，自动构建你的能力画像。"
+          action={<PrimaryButton onClick={() => navigate("/")}>开始第一场面试</PrimaryButton>}
+        />
       </div>
     );
   }
@@ -604,36 +603,25 @@ export default function Profile() {
             className="mb-0"
           />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[420px]">
-            <SurfaceCard className="px-4 py-4 bg-card/85">
-              <div className="text-[12px] text-dim">总练习</div>
-              <div className="mt-2 text-[24px] font-bold text-accent-light">{stats.total_sessions || 0}</div>
-            </SurfaceCard>
-            <SurfaceCard className="px-4 py-4 bg-card/85">
-              <div className="text-[12px] text-dim">综合平均</div>
-              <div className="mt-2 text-[24px] font-bold text-green">{stats.avg_score || "-"}</div>
-            </SurfaceCard>
-            <SurfaceCard className="px-4 py-4 bg-card/85">
-              <div className="text-[12px] text-dim">待修弱点</div>
-              <div className="mt-2 text-[24px] font-bold text-text">{weakActiveAll.length}</div>
-            </SurfaceCard>
-            <SurfaceCard className="px-4 py-4 bg-card/85">
-              <div className="text-[12px] text-dim">已改善</div>
-              <div className="mt-2 text-[24px] font-bold text-text">{weakImproved.length}</div>
-            </SurfaceCard>
+            <MetricCard label="总练习" value={stats.total_sessions || 0} tone="accent" />
+            <MetricCard label="综合平均" value={stats.avg_score || "-"} tone="green" />
+            <MetricCard label="待修弱点" value={weakActiveAll.length} />
+            <MetricCard label="已改善" value={weakImproved.length} />
           </div>
         </div>
       </section>
 
-      <SurfaceCard className="mb-8 px-3 py-3">
-        <div className="flex flex-wrap gap-2">
-          <SubtleButton onClick={() => scrollToSection(coachRef)} className="bg-accent/10 py-1.5 text-[12px] text-accent-light hover:text-accent-light">现在该练什么</SubtleButton>
-          <SubtleButton onClick={() => scrollToSection(insightsRef)} className="py-1.5 text-[12px]">画像重点</SubtleButton>
-          <SubtleButton onClick={() => scrollToSection(trendRef)} className="py-1.5 text-[12px]">成长趋势</SubtleButton>
-          <SubtleButton onClick={() => scrollToSection(masteryRef)} className="py-1.5 text-[12px]">掌握度</SubtleButton>
-          <SubtleButton onClick={() => scrollToSection(analysisRef)} className="py-1.5 text-[12px]">表达与思维</SubtleButton>
-          <SubtleButton onClick={() => scrollToSection(statsRef)} className="py-1.5 text-[12px]">练习统计</SubtleButton>
-        </div>
-      </SurfaceCard>
+      <SectionNav
+        className="mb-8"
+        items={[
+          { label: "现在该练什么", onClick: () => scrollToSection(coachRef), active: true },
+          { label: "画像重点", onClick: () => scrollToSection(insightsRef) },
+          { label: "成长趋势", onClick: () => scrollToSection(trendRef) },
+          { label: "掌握度", onClick: () => scrollToSection(masteryRef) },
+          { label: "表达与思维", onClick: () => scrollToSection(analysisRef) },
+          { label: "练习统计", onClick: () => scrollToSection(statsRef) },
+        ]}
+      />
 
       <AppSection title="练习统计" subtitle="先看训练量、平均分和不同模式表现，再决定后面该从哪个模块深入。" className="mb-7" ref={statsRef}>
         {/* Overview row */}
@@ -862,12 +850,11 @@ export default function Profile() {
       {/* Analysis panels */}
       {(((profile.thinking_patterns?.strengths || []).length > 0 ||
         (profile.thinking_patterns?.gaps || []).length > 0) || profile.communication?.style) && (
-        <div className="mb-7 rounded-2xl border border-border bg-card px-4 py-4 md:px-5 md:py-5" ref={analysisRef}>
-          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-            <div>
-              <div className="text-base font-semibold text-text">表达与思维分析</div>
-              <div className="text-[12px] text-dim mt-1">把较长的分析内容收进二级面板，避免主页面继续拉长。</div>
-            </div>
+        <InsightCard
+          className="mb-7"
+          title="表达与思维分析"
+          subtitle="把较长的分析内容收进二级面板，避免主页面继续拉长。"
+          action={
             <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-hover/70 p-1 flex-wrap">
               <button
                 onClick={() => setAnalysisTab("thinking")}
@@ -882,8 +869,9 @@ export default function Profile() {
                 沟通风格
               </button>
             </div>
-          </div>
-
+          }
+          ref={analysisRef}
+        >
           {analysisTab === "thinking" && (
             ((profile.thinking_patterns?.strengths || []).length > 0 || (profile.thinking_patterns?.gaps || []).length > 0) ? (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -938,7 +926,7 @@ export default function Profile() {
               <div className="rounded-xl bg-hover px-4 py-5 text-sm text-dim">暂时还没有足够的沟通风格分析数据。</div>
             )
           )}
-        </div>
+        </InsightCard>
       )}
 
       {detailWeakPoint && (

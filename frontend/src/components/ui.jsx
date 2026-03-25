@@ -104,3 +104,70 @@ export function TextInput({ className = "", ...props }) {
     />
   );
 }
+
+export function PanelHeader({ title, subtitle, action = null, className = "" }) {
+  return (
+    <div className={`mb-4 flex items-start justify-between gap-3 flex-wrap ${className}`}>
+      <div>
+        {title ? <div className="text-[15px] font-semibold tracking-[-0.01em] text-text">{title}</div> : null}
+        {subtitle ? <div className="mt-1 text-[12px] leading-6 text-dim">{subtitle}</div> : null}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function MetricCard({ label, value, hint = null, tone = "default", className = "" }) {
+  const toneClass = {
+    default: "text-text",
+    accent: "text-accent-light",
+    green: "text-green",
+    red: "text-red",
+    orange: "text-orange",
+  }[tone] || "text-text";
+
+  return (
+    <SurfaceCard className={`px-4 py-4 bg-card/85 ${className}`}>
+      <div className="text-[12px] text-dim">{label}</div>
+      <div className={`mt-2 text-[24px] font-bold ${toneClass}`}>{value}</div>
+      {hint ? <div className="mt-1 text-[12px] leading-6 text-dim">{hint}</div> : null}
+    </SurfaceCard>
+  );
+}
+
+export function EmptyState({ title, description, action = null, className = "" }) {
+  return (
+    <SurfaceCard className={`px-6 py-8 text-center ${className}`}>
+      <div className="text-[16px] font-semibold text-text">{title}</div>
+      {description ? <div className="mt-2 text-[13px] leading-7 text-dim max-w-xl mx-auto">{description}</div> : null}
+      {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
+    </SurfaceCard>
+  );
+}
+
+export function SectionNav({ items = [], className = "" }) {
+  return (
+    <SurfaceCard className={`px-3 py-3 ${className}`}>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <SubtleButton
+            key={item.label}
+            onClick={item.onClick}
+            className={`${item.active ? "bg-accent/10 text-accent-light hover:text-accent-light" : ""} py-1.5 text-[12px]`}
+          >
+            {item.label}
+          </SubtleButton>
+        ))}
+      </div>
+    </SurfaceCard>
+  );
+}
+
+export function InsightCard({ title, subtitle = null, action = null, children, className = "" }) {
+  return (
+    <SurfaceCard className={`px-5 py-5 md:px-6 md:py-6 ${className}`}>
+      <PanelHeader title={title} subtitle={subtitle} action={action} />
+      {children}
+    </SurfaceCard>
+  );
+}

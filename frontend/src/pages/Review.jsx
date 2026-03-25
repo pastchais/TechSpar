@@ -1,7 +1,7 @@
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { AppSection, PageTitle, SectionTitle, SubtleButton, Badge, OutlineButton, PrimaryButton, SurfaceCard } from "../components/ui.jsx";
+import { AppSection, InsightCard, PageTitle, SectionTitle, SubtleButton, Badge, OutlineButton, PanelHeader, PrimaryButton, SurfaceCard } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
 import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview, getHistory, getAnalysisStatus } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
@@ -122,13 +122,11 @@ function DimensionScores({ dimensionScores, avgScore }) {
   if (!entries.length) return null;
 
   return (
-    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
-      <div className="text-lg font-semibold mb-4">
-        维度评分
-        {avgScore != null && (
-          <span className="text-sm font-normal text-dim ml-3">综合 {avgScore}/10</span>
-        )}
-      </div>
+    <SurfaceCard className="px-5 py-6 md:px-6 md:py-6 mb-6">
+      <PanelHeader
+        title="维度评分"
+        action={avgScore != null ? <span className="text-sm font-normal text-dim">综合 {avgScore}/10</span> : null}
+      />
       {entries.map(([key, label]) => {
         const score = dimensionScores[key];
         const color = score >= 8 ? "var(--green)" : score >= 6 ? "var(--accent-light)" : score >= 4 ? "#e2b93b" : "var(--red)";
@@ -142,7 +140,7 @@ function DimensionScores({ dimensionScores, avgScore }) {
           </div>
         );
       })}
-    </div>
+    </SurfaceCard>
   );
 }
 
@@ -150,11 +148,11 @@ function AutoScoreCard({ autoScore }) {
   if (!autoScore || !Object.keys(autoScore).length) return null;
   const entries = Object.entries(AUTO_SCORE_LABELS).filter(([k]) => autoScore[k] != null);
   return (
-    <div className="bg-card border border-border rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <div className="text-lg font-semibold">自动评分</div>
-        <div className="text-sm text-dim">总分 {autoScore.total_score ?? "-"}/25 · {autoScore.summary || ""}</div>
-      </div>
+    <SurfaceCard className="px-5 py-6 md:px-6 md:py-6 mb-6">
+      <PanelHeader
+        title="自动评分"
+        action={<div className="text-sm text-dim">总分 {autoScore.total_score ?? "-"}/25 · {autoScore.summary || ""}</div>}
+      />
       {entries.map(([key, label]) => {
         const score = autoScore[key];
         const percent = (score / 5) * 100;
@@ -193,36 +191,40 @@ function AutoScoreCard({ autoScore }) {
       {autoScore.entered_mistake_book && (
         <div className="mt-4 text-[13px] text-red">该复盘分数较低，已自动写入错题本。</div>
       )}
-    </div>
+    </SurfaceCard>
   );
 }
 
 function TrendTrainingMetaCard({ meta, focusTrend }) {
   if (!meta) return null;
   return (
-    <div className="bg-card border border-green/20 rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        <div className="text-lg font-semibold">本轮训练说明</div>
-        <span className="px-2.5 py-1 rounded-md text-[12px] font-medium bg-green/10 text-green">{meta.label}</span>
-        {focusTrend && <span className="text-[12px] text-dim">轨迹状态：{focusTrend}</span>}
-      </div>
+    <InsightCard
+      className="mb-6 border-green/20"
+      title="本轮训练说明"
+      action={
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-2.5 py-1 rounded-md text-[12px] font-medium bg-green/10 text-green">{meta.label}</span>
+          {focusTrend && <span className="text-[12px] text-dim">轨迹状态：{focusTrend}</span>}
+        </div>
+      }
+    >
       <div className="text-[14px] text-text leading-[1.8]">{meta.summary}</div>
-    </div>
+    </InsightCard>
   );
 }
 
 function PracticeComparisonCard({ comparison }) {
   if (!comparison) return null;
   return (
-    <div className="bg-card border border-green/20 rounded-2xl px-5 py-6 md:px-6 md:py-6 mb-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <div className="text-lg font-semibold">复练结果对比</div>
-        {typeof comparison.delta_score === "number" && (
-          <div className={`text-sm font-semibold ${comparison.delta_score >= 0 ? "text-green" : "text-red"}`}>
-            {comparison.delta_score >= 0 ? `+${comparison.delta_score}` : comparison.delta_score} 分
-          </div>
-        )}
-      </div>
+    <InsightCard
+      className="mb-6 border-green/20"
+      title="复练结果对比"
+      action={typeof comparison.delta_score === "number" ? (
+        <div className={`text-sm font-semibold ${comparison.delta_score >= 0 ? "text-green" : "text-red"}`}>
+          {comparison.delta_score >= 0 ? `+${comparison.delta_score}` : comparison.delta_score} 分
+        </div>
+      ) : null}
+    >
       {comparison.headline && <div className="text-[15px] leading-[1.8] text-text mb-3">{comparison.headline}</div>}
       {comparison.bullets?.length > 0 && (
         <div className="flex flex-col gap-1.5 mb-3">
@@ -232,7 +234,7 @@ function PracticeComparisonCard({ comparison }) {
         </div>
       )}
       {comparison.verdict && <div className="text-[13px] text-dim">结论：{comparison.verdict}</div>}
-    </div>
+    </InsightCard>
   );
 }
 
