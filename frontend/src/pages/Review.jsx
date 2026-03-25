@@ -733,27 +733,43 @@ function DrillReview({
         return (
           <div className="mb-4 rounded-[24px] border border-border bg-card/80 p-3 md:p-4">
             <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-4">
-              <div className="rounded-2xl border border-border/70 bg-card/70 p-3">
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3 md:p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="text-[14px] font-semibold text-text">题目导航</div>
+                  <div>
+                    <div className="text-[14px] font-semibold text-text">题目目录</div>
+                    <div className="text-[11px] text-dim mt-0.5">先跳到最值得复盘的题，再逐题往后看。</div>
+                  </div>
                   <Badge tone="muted">共 {questionItems.length} 题</Badge>
                 </div>
-                <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
-                  {questionItems.map((item) => {
+                <div className="space-y-1.5 max-h-[72vh] overflow-y-auto pr-1">
+                  {questionItems.map((item, idx) => {
                     const score = item.numericScore;
                     const active = item.q.id === activeQuestionId;
                     const low = score != null && score < 6;
                     return (
-                      <button key={item.q.id} type="button" onClick={() => setActiveQuestionId(item.q.id)} className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${active ? "border-accent bg-accent/10 shadow-[0_0_0_1px_rgba(245,158,11,0.12)]" : "border-border bg-card hover:border-accent/30"}`}>
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className={`text-[13px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{item.q.id}</span>
-                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            {score != null && <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>}
-                            {item.s.focus_hit && <span className="text-[10px] rounded bg-green/10 px-1.5 py-0.5 text-green">focus</span>}
-                            {item.isSkipped && <span className="text-[10px] rounded bg-hover px-1.5 py-0.5 text-dim">未作答</span>}
+                      <button
+                        key={item.q.id}
+                        type="button"
+                        onClick={() => setActiveQuestionId(item.q.id)}
+                        className={`group relative w-full rounded-xl px-3 py-2.5 text-left transition-all ${active ? "bg-accent/8 text-text" : "bg-transparent hover:bg-hover/70 text-text"}`}
+                      >
+                        <div className={`absolute left-0 top-2 bottom-2 w-[2px] rounded-full transition-all ${active ? "bg-accent-light opacity-100" : "bg-border opacity-0 group-hover:opacity-100"}`} />
+                        <div className="pl-2">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{idx + 1}</span>
+                              {score != null && <span className={`text-[11px] ${low ? "text-red" : score >= 8 ? "text-green" : "text-dim"}`}>{score}/10</span>}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {item.s.focus_hit && <span className="h-2 w-2 rounded-full bg-green" title="命中 focus" />}
+                              {item.isSkipped && <span className="h-2 w-2 rounded-full bg-border" title="未作答" />}
+                              {low && <span className="h-2 w-2 rounded-full bg-red" title="优先修复" />}
+                            </div>
+                          </div>
+                          <div className={`text-[12px] leading-[1.6] line-clamp-2 ${active ? "text-text" : "text-dim"}`}>
+                            {item.isSkipped ? item.q.question : (item.s.weak_point || item.q.focus_area || item.q.question)}
                           </div>
                         </div>
-                        <div className="text-[11px] leading-[1.6] text-dim line-clamp-2">{item.isSkipped ? item.q.question : (item.s.weak_point || item.q.focus_area || item.q.question)}</div>
                       </button>
                     );
                   })}
@@ -790,96 +806,130 @@ function DrillReview({
                   {isSkipped ? (
                     <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
                   ) : (
-                    <>
-                      <div className="bg-hover rounded-lg px-3 py-3 md:px-3.5 mb-3">
-                        <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
-                        <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
-                      </div>
-                      {s.assessment && s.assessment !== "未作答" && <div className="text-sm leading-[1.7] text-text mb-2"><strong className="text-xs opacity-60">点评: </strong>{s.assessment}</div>}
-                      {s.improvement && <div className="text-sm leading-[1.7] text-accent-light bg-accent/8 rounded-lg px-3 py-2.5 md:px-3.5 mb-2"><strong className="text-xs opacity-70">改进建议: </strong>{s.improvement}</div>}
-                      {s.understanding && s.understanding !== "未作答" && <div className="text-[13px] text-dim italic mt-1">理解程度: {s.understanding}</div>}
-                      {s.key_missing?.length > 0 && <div className="text-[13px] text-red leading-normal">遗漏关键点: {s.key_missing.join("、")}</div>}
-                      {s.weak_point && (
-                        <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
-                          <span>薄弱点标签: {s.weak_point}</span>
-                          {s.semantic_bucket && topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer" title={s.semantic_bucket}>{bucketLabel(s.semantic_bucket)}</button>}
-                          {topic && <button onClick={() => navigate(`/profile/topic/${topic}`)} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer">看专题</button>}
-                          {topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-hover text-dim border-none cursor-pointer">先看题库</button>}
-                          {topic && <button onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer">去修复</button>}
+                    <div className="space-y-3">
+                      <section className="rounded-2xl bg-hover/70 px-3.5 py-3.5 md:px-4">
+                        <div className="text-[12px] font-semibold text-dim mb-2">回答与点评</div>
+                        <div className="rounded-xl bg-card px-3 py-3 mb-3">
+                          <div className="text-xs font-semibold text-dim mb-1.5 opacity-70">你的回答</div>
+                          <div className="text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
                         </div>
-                      )}
+                        {s.assessment && s.assessment !== "未作答" && <div className="text-sm leading-[1.8] text-text mb-2"><strong className="text-xs opacity-60">点评：</strong>{s.assessment}</div>}
+                        {s.improvement && <div className="text-sm leading-[1.8] text-accent-light bg-accent/8 rounded-xl px-3 py-2.5 mb-2"><strong className="text-xs opacity-70">改进建议：</strong>{s.improvement}</div>}
+                        {s.understanding && s.understanding !== "未作答" && <div className="text-[13px] text-dim italic">理解程度：{s.understanding}</div>}
+                        {s.weak_point && (
+                          <div className="mt-2 text-[13px] text-red leading-[1.7] flex items-center gap-2 flex-wrap">
+                            <span>薄弱点标签：{s.weak_point}</span>
+                            {s.semantic_bucket && topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: bucketLabel(s.semantic_bucket) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer" title={s.semantic_bucket}>{bucketLabel(s.semantic_bucket)}</button>}
+                            {topic && <button onClick={() => navigate(`/profile/topic/${topic}`)} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-accent/10 text-accent-light border-none cursor-pointer">看专题</button>}
+                            {topic && <button onClick={() => navigate("/knowledge", { state: { selectedTopic: topic, searchKeyword: s.semantic_bucket ? bucketLabel(s.semantic_bucket) : (s.weak_point || q.focus_area || q.question) } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-card text-dim border-none cursor-pointer">先看题库</button>}
+                            {topic && <button onClick={() => navigate("/", { state: { quickStartMode: "topic_drill", quickStartTopic: topic } })} className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-green/10 text-green border-none cursor-pointer">去修复</button>}
+                          </div>
+                        )}
+                      </section>
 
-                      <InlineAutoScoreDetail detail={s.auto_score_detail} />
+                      <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open>
+                        <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-semibold text-text">评分细项</span>
+                          <span className="text-[11px] text-dim group-open:hidden">展开</span>
+                          <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
+                        </summary>
+                        <div className="mt-3">
+                          {s.key_missing?.length > 0 && <div className="text-[13px] text-red leading-normal mb-2">遗漏关键点：{s.key_missing.join("、")}</div>}
+                          <InlineAutoScoreDetail detail={s.auto_score_detail} />
+                        </div>
+                      </details>
 
                       {topic && (
-                        <div className="mt-3 pt-3 border-t border-border">
-                          {refAnswers[q.id]?.reference_answer ? (
-                            <div className="text-sm leading-[1.8]">
-                              <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
-                                <span className="flex items-center gap-1.5"><BookOpen size={13} /> 标准参考答案</span>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {refAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
-                                  <button className="text-[12px] text-dim bg-transparent border-none cursor-pointer" onClick={() => handleRefAnswer(q.id, q.question, true)} disabled={refLoading[q.id]}>{refLoading[q.id] ? "重新生成中..." : "重新生成"}</button>
-                                </div>
-                              </div>
-                              <div className="md-content bg-hover rounded-lg px-3.5 py-3"><ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown></div>
-
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}><BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}</button>
-                                <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50" onClick={() => handleImprovedAnswer(q.id, q.question)} disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}><BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}</button>
-                              </div>
-
-                              {improvedAnswers[q.id]?.improved_answer && (
-                                <div className="mt-3 rounded-lg border border-green/20 bg-green/5 px-3 py-3">
-                                  <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
-                                    <span>我的改进版答案</span>
-                                    {improvedAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
-                                  </div>
-                                  <div className="md-content rounded-lg bg-card px-3.5 py-3"><ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown></div>
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}><BookOpen size={13} /> 带着这版再练一遍</button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {followupOpen[q.id] && (
-                                <div className="mt-3 rounded-lg border border-border bg-hover px-3 py-3">
-                                  <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
-                                  <div className="flex flex-wrap gap-2 mb-2.5">
-                                    {FOLLOWUP_QUICK_ACTIONS.map((item) => (
-                                      <button key={item.label} className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer" onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))} type="button">{item.label}</button>
-                                    ))}
-                                  </div>
-                                  <textarea className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none" placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子" value={followupInput[q.id] || ""} onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))} />
-                                  <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                    <button className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50" onClick={() => handleFollowup(q.id, q.question)} disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}>{followupLoading[q.id] ? "AI 思考中..." : "发送追问"}</button>
-                                    <button className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer" onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: "" }))}>清空输入</button>
-                                  </div>
-                                  {followupHistory[q.id]?.length > 0 && (
-                                    <div className="mt-3">
-                                      <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导记录</div>
-                                      <div className="flex flex-col gap-3">
-                                        {followupHistory[q.id].map((item, idx) => (
-                                          <div key={`${q.id}-${idx}`} className="rounded-lg border border-border bg-card px-3.5 py-3">
-                                            <div className="text-[12px] font-semibold text-accent-light mb-1">你追问</div>
-                                            <div className="text-sm leading-[1.7] whitespace-pre-wrap">{item.followup}</div>
-                                            <div className="text-[12px] font-semibold text-dim mt-3 mb-1">AI 回答</div>
-                                            <div className="md-content"><ReactMarkdown>{item.answer || ""}</ReactMarkdown></div>
-                                            {item.created_at && <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>}
-                                          </div>
-                                        ))}
-                                      </div>
+                        <>
+                          <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group">
+                            <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+                              <span className="text-[13px] font-semibold text-text flex items-center gap-1.5"><BookOpen size={13} /> 标准参考答案</span>
+                              <span className="text-[11px] text-dim group-open:hidden">展开</span>
+                              <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
+                            </summary>
+                            <div className="mt-3 text-sm leading-[1.8]">
+                              {refAnswers[q.id]?.reference_answer ? (
+                                <>
+                                  <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-3 flex-wrap">
+                                    <span>标准参考答案</span>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {refAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">生成于 {refAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
+                                      <button className="text-[12px] text-dim bg-transparent border-none cursor-pointer" onClick={() => handleRefAnswer(q.id, q.question, true)} disabled={refLoading[q.id]}>{refLoading[q.id] ? "重新生成中..." : "重新生成"}</button>
                                     </div>
-                                  )}
-                                </div>
+                                  </div>
+                                  <div className="md-content bg-hover rounded-xl px-3.5 py-3"><ReactMarkdown>{refAnswers[q.id].reference_answer}</ReactMarkdown></div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => setFollowupOpen((p) => ({ ...p, [q.id]: !p[q.id] }))}><BookOpen size={13} /> {followupOpen[q.id] ? "收起继续问 AI" : "继续问 AI"}</button>
+                                    <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-50" onClick={() => handleImprovedAnswer(q.id, q.question)} disabled={improvedLoading[q.id] || !refAnswers[q.id]?.reference_answer}><BookOpen size={13} /> {improvedLoading[q.id] ? "整理中..." : "吸收为改进版答案"}</button>
+                                  </div>
+                                </>
+                              ) : (
+                                <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50" onClick={() => handleRefAnswer(q.id, q.question)} disabled={refLoading[q.id]}><BookOpen size={13} />{refLoading[q.id] ? "正在生成参考答案..." : "生成标准参考答案"}</button>
                               )}
                             </div>
-                          ) : (
-                            <button className="text-[13px] text-accent-light flex items-center gap-1.5 bg-transparent border-none cursor-pointer transition-opacity disabled:opacity-50" onClick={() => handleRefAnswer(q.id, q.question)} disabled={refLoading[q.id]}><BookOpen size={13} />{refLoading[q.id] ? "正在生成参考答案..." : "查看标准参考答案"}</button>
+                          </details>
+
+                          {improvedAnswers[q.id]?.improved_answer && (
+                            <details className="rounded-2xl border border-green/20 bg-green/5 px-3.5 py-3 group">
+                              <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+                                <span className="text-[13px] font-semibold text-text">改进版答案</span>
+                                <span className="text-[11px] text-dim group-open:hidden">展开</span>
+                                <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
+                              </summary>
+                              <div className="mt-3">
+                                <div className="text-xs font-semibold text-dim mb-2 flex items-center justify-between gap-2 flex-wrap">
+                                  <span>我的改进版答案</span>
+                                  {improvedAnswers[q.id]?.generated_at && <span className="text-[11px] text-dim">{improvedAnswers[q.id].generated_at.replace("T", " ").slice(0, 16)}</span>}
+                                </div>
+                                <div className="md-content rounded-xl bg-card px-3.5 py-3"><ReactMarkdown>{improvedAnswers[q.id].improved_answer}</ReactMarkdown></div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <button className="text-[13px] text-green flex items-center gap-1.5 bg-transparent border-none cursor-pointer" onClick={() => handlePracticeImprovedAnswer(q.id, q.question, q.focus_area)}><BookOpen size={13} /> 带着这版再练一遍</button>
+                                </div>
+                              </div>
+                            </details>
                           )}
-                        </div>
+
+                          {followupOpen[q.id] && (
+                            <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open>
+                              <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+                                <span className="text-[13px] font-semibold text-text">AI 继续追问</span>
+                                <span className="text-[11px] text-dim group-open:hidden">展开</span>
+                                <span className="text-[11px] text-dim hidden group-open:inline">收起</span>
+                              </summary>
+                              <div className="mt-3 rounded-xl bg-hover px-3 py-3">
+                                <div className="text-xs font-semibold text-dim mb-2">临时追问（不会覆盖标准参考答案）</div>
+                                <div className="flex flex-wrap gap-2 mb-2.5">
+                                  {FOLLOWUP_QUICK_ACTIONS.map((item) => (
+                                    <button key={item.label} className="px-2.5 py-1 rounded-lg text-[12px] bg-card text-dim border border-border cursor-pointer" onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: item.prompt }))} type="button">{item.label}</button>
+                                  ))}
+                                </div>
+                                <textarea className="w-full min-h-[84px] rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text resize-y outline-none" placeholder="例如：给我一个更口语化的版本 / 如果面试官继续追问一致性怎么答 / 给一个项目里的实际例子" value={followupInput[q.id] || ""} onChange={(e) => setFollowupInput((p) => ({ ...p, [q.id]: e.target.value }))} />
+                                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                  <button className="px-3 py-1.5 rounded-lg text-[13px] bg-accent/10 text-accent-light border-none cursor-pointer disabled:opacity-50" onClick={() => handleFollowup(q.id, q.question)} disabled={followupLoading[q.id] || !(followupInput[q.id] || "").trim()}>{followupLoading[q.id] ? "AI 思考中..." : "发送追问"}</button>
+                                  <button className="px-3 py-1.5 rounded-lg text-[13px] bg-transparent text-dim border border-border cursor-pointer" onClick={() => setFollowupInput((p) => ({ ...p, [q.id]: "" }))}>清空输入</button>
+                                </div>
+                                {followupHistory[q.id]?.length > 0 && (
+                                  <div className="mt-3">
+                                    <div className="text-xs font-semibold text-dim mb-2">AI 临时辅导记录</div>
+                                    <div className="flex flex-col gap-3">
+                                      {followupHistory[q.id].map((item, idx) => (
+                                        <div key={`${q.id}-${idx}`} className="rounded-xl border border-border bg-card px-3.5 py-3">
+                                          <div className="text-[12px] font-semibold text-accent-light mb-1">你追问</div>
+                                          <div className="text-sm leading-[1.7] whitespace-pre-wrap">{item.followup}</div>
+                                          <div className="text-[12px] font-semibold text-dim mt-3 mb-1">AI 回答</div>
+                                          <div className="md-content"><ReactMarkdown>{item.answer || ""}</ReactMarkdown></div>
+                                          {item.created_at && <div className="mt-2 text-[11px] text-dim">{item.created_at.replace("T", " ").slice(0, 16)}</div>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          )}
+                        </>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
 
