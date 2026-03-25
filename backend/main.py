@@ -3,11 +3,12 @@ import re
 import os
 import json
 import uuid
+import asyncio
 from datetime import datetime
 
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from backend.models import (
     StartInterviewRequest, ChatRequest, EndDrillRequest,
@@ -28,6 +29,8 @@ from backend.storage.sessions import (
     get_session, list_sessions, list_sessions_by_topic,
     delete_session, list_distinct_topics, upsert_reference_answer,
     append_reference_followup, upsert_improved_answer,
+    upsert_analysis_task, get_analysis_task, get_latest_analysis_task_by_session,
+    list_incomplete_analysis_tasks, fail_analysis_task,
 )
 from backend.graph import build_graph
 from backend.auth import (
@@ -999,6 +1002,26 @@ router = APIRouter(prefix="/api")
 _graphs: dict[str, dict] = {}
 # Drill session data (questions stored for evaluation at end)
 _drill_sessions: dict[str, dict] = {}
+# Recording analysis task states keyed by session_id
+_recording_tasks: dict[str, dict] = {}
+# Drill review task states keyed by session_id
+_drill_review_tasks: dict[str, dict] = {}
+# Resume review task states keyed by session_id
+_resume_review_tasks: dict[str, dict] = {}
+
+
+def _recover_incomplete_analysis_tasks():
+    import logging
+    logger = logging.getLogger("uvicorn")
+    stale_tasks = list_incomplete_analysis_tasks()
+    if not stale_tasks:
+        return
+    for task in stale_tasks:
+        fail_analysis_task(task.get("task_id"), error="服务重启导致任务中断，请重新发起。")
+    _recording_tasks.clear()
+    _drill_review_tasks.clear()
+    _resume_review_tasks.clear()
+    logger.warning(f"Recovered {len(stale_tasks)} incomplete analysis tasks by marking them failed.")
 
 
 @app.on_event("startup")
@@ -1023,6 +1046,7 @@ def preload_models():
     init_memory_table()
     init_users_table()
     ensure_default_user()
+    _recover_incomplete_analysis_tasks()
     logger.info("Database tables initialized.")
 
 
@@ -1160,15 +1184,189 @@ async def recording_transcribe(
         raise HTTPException(500, f"Transcription failed: {e}")
 
 
-@router.post("/recording/analyze")
-async def recording_analyze(req: RecordingAnalyzeRequest, user_id: str = Depends(get_current_user)):
-    """Analyze a recording transcript — dual mode extracts Q&A, solo mode does holistic eval."""
-    session_id = str(uuid.uuid4())
+async def _run_recording_analysis_task(req: RecordingAnalyzeRequest, session_id: str, user_id: str):
+    task = _recording_tasks.get(session_id)
+    started_at = datetime.now().isoformat()
+    if task:
+        task.update({"status": "running", "started_at": started_at})
+    upsert_analysis_task(
+        session_id,
+        session_id=session_id,
+        task_type="recording_analysis",
+        status="running",
+        user_id=user_id,
+        meta={"recording_mode": req.recording_mode, "company": req.company, "position": req.position},
+        created_at=(task or {}).get("created_at"),
+        started_at=started_at,
+    )
+    try:
+        if req.recording_mode == "dual":
+            result = await _analyze_dual(req, session_id, user_id)
+        else:
+            result = await _analyze_solo(req, session_id, user_id)
+        finished_at = datetime.now().isoformat()
+        _recording_tasks[session_id] = {
+            "status": "completed",
+            "user_id": user_id,
+            "recording_mode": req.recording_mode,
+            "company": req.company,
+            "position": req.position,
+            "created_at": task.get("created_at") if task else datetime.now().isoformat(),
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "result": result,
+        }
+        upsert_analysis_task(
+            session_id,
+            session_id=session_id,
+            task_type="recording_analysis",
+            status="completed",
+            user_id=user_id,
+            meta={"recording_mode": req.recording_mode, "company": req.company, "position": req.position},
+            result=result,
+            created_at=(task or {}).get("created_at"),
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+    except Exception as e:
+        error_text = getattr(e, "detail", None) or str(e) or "分析失败"
+        finished_at = datetime.now().isoformat()
+        _recording_tasks[session_id] = {
+            "status": "failed",
+            "user_id": user_id,
+            "recording_mode": req.recording_mode,
+            "company": req.company,
+            "position": req.position,
+            "created_at": task.get("created_at") if task else datetime.now().isoformat(),
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "error": error_text,
+        }
+        upsert_analysis_task(
+            session_id,
+            session_id=session_id,
+            task_type="recording_analysis",
+            status="failed",
+            user_id=user_id,
+            meta={"recording_mode": req.recording_mode, "company": req.company, "position": req.position},
+            error=error_text,
+            created_at=(task or {}).get("created_at"),
+            started_at=started_at,
+            finished_at=finished_at,
+        )
 
-    if req.recording_mode == "dual":
-        return await _analyze_dual(req, session_id, user_id)
-    else:
-        return await _analyze_solo(req, session_id, user_id)
+
+@router.post("/recording/analyze")
+async def recording_analyze(req: RecordingAnalyzeRequest, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
+    """Queue a recording transcript analysis and return immediately."""
+    session_id = str(uuid.uuid4())
+    created_at = datetime.now().isoformat()
+    _recording_tasks[session_id] = {
+        "status": "queued",
+        "user_id": user_id,
+        "recording_mode": req.recording_mode,
+        "company": req.company,
+        "position": req.position,
+        "created_at": created_at,
+    }
+    upsert_analysis_task(
+        session_id,
+        session_id=session_id,
+        task_type="recording_analysis",
+        status="queued",
+        user_id=user_id,
+        meta={"recording_mode": req.recording_mode, "company": req.company, "position": req.position},
+        created_at=created_at,
+    )
+    background_tasks.add_task(_run_recording_analysis_task, req, session_id, user_id)
+    return {
+        "session_id": session_id,
+        "status": "queued",
+        "mode": "recording",
+        "recording_mode": req.recording_mode,
+    }
+
+
+def _get_analysis_task_payload(session_id: str, user_id: str) -> dict:
+    task = None
+    task_type = None
+
+    recording_task = _recording_tasks.get(session_id)
+    if recording_task and recording_task.get("user_id") == user_id:
+        task = recording_task
+        task_type = "recording_analysis"
+
+    if task is None:
+        drill_task = _drill_review_tasks.get(session_id)
+        if drill_task is not None:
+            task = drill_task
+            task_type = "drill_review"
+
+    if task is None:
+        resume_task = _resume_review_tasks.get(session_id)
+        if resume_task is not None:
+            task = resume_task
+            task_type = "resume_review"
+
+    if task is None:
+        db_task = get_latest_analysis_task_by_session(session_id, user_id=user_id)
+        if not db_task:
+            raise HTTPException(404, "Session not found.")
+        task_type = db_task.get("task_type")
+        meta = db_task.get("meta") or {}
+        task = {
+            "status": db_task.get("status"),
+            "created_at": db_task.get("created_at"),
+            "started_at": db_task.get("started_at"),
+            "finished_at": db_task.get("finished_at"),
+            "result": db_task.get("result") or {},
+            "error": db_task.get("error"),
+            "recording_mode": meta.get("recording_mode"),
+            "company": meta.get("company"),
+            "position": meta.get("position"),
+        }
+
+    mode_map = {
+        "recording_analysis": "recording",
+        "drill_review": "topic_drill",
+        "resume_review": "resume",
+    }
+    payload = {
+        "session_id": session_id,
+        "task_type": task_type,
+        "status": task.get("status") or "queued",
+        "mode": mode_map.get(task_type),
+        "created_at": task.get("created_at"),
+        "started_at": task.get("started_at"),
+        "finished_at": task.get("finished_at"),
+    }
+    if task_type == "recording_analysis":
+        payload["recording_mode"] = task.get("recording_mode")
+    if task.get("status") == "completed":
+        payload.update(task.get("result") or {})
+    elif task.get("status") == "failed":
+        payload["error"] = task.get("error") or "任务执行失败"
+    return payload
+
+
+@router.get("/analysis/status/{session_id}")
+async def get_analysis_status(session_id: str, user_id: str = Depends(get_current_user)):
+    return _get_analysis_task_payload(session_id, user_id)
+
+
+@router.get("/recording/status/{session_id}")
+async def get_recording_analysis_status(session_id: str, user_id: str = Depends(get_current_user)):
+    return _get_analysis_task_payload(session_id, user_id)
+
+
+@router.get("/interview/end-status/{session_id}")
+async def get_drill_review_status(session_id: str, user_id: str = Depends(get_current_user)):
+    return _get_analysis_task_payload(session_id, user_id)
+
+
+@router.get("/interview/resume-end-status/{session_id}")
+async def get_resume_review_status(session_id: str, user_id: str = Depends(get_current_user)):
+    return _get_analysis_task_payload(session_id, user_id)
 
 
 async def _analyze_dual(req: RecordingAnalyzeRequest, session_id: str, user_id: str):
@@ -1184,10 +1382,13 @@ async def _analyze_dual(req: RecordingAnalyzeRequest, session_id: str, user_id: 
     structure_prompt = RECORDING_STRUCTURE_PROMPT.format(
         transcript=req.transcript[:8000],
     )
-    response = llm.invoke([
-        SystemMessage(content="你是面试记录分析引擎。只返回 JSON，不要其他内容。"),
-        HumanMessage(content=structure_prompt),
-    ])
+    response = await asyncio.to_thread(
+        llm.invoke,
+        [
+            SystemMessage(content="你是面试记录分析引擎。只返回 JSON，不要其他内容。"),
+            HumanMessage(content=structure_prompt),
+        ],
+    )
 
     try:
         structured = _parse_json_response(response.content)
@@ -1228,10 +1429,13 @@ async def _analyze_dual(req: RecordingAnalyzeRequest, session_id: str, user_id: 
     eval_prompt = RECORDING_DUAL_EVAL_PROMPT.format(
         qa_pairs="\n\n".join(qa_lines),
     )
-    eval_response = llm.invoke([
-        SystemMessage(content="你是面试评估引擎。只返回 JSON，不要其他内容。"),
-        HumanMessage(content=eval_prompt),
-    ])
+    eval_response = await asyncio.to_thread(
+        llm.invoke,
+        [
+            SystemMessage(content="你是面试评估引擎。只返回 JSON，不要其他内容。"),
+            HumanMessage(content=eval_prompt),
+        ],
+    )
 
     try:
         eval_result = normalize_drill_evaluation_payload(_parse_json_response(eval_response.content), None).model_dump()
@@ -1284,10 +1488,13 @@ async def _analyze_solo(req: RecordingAnalyzeRequest, session_id: str, user_id: 
     eval_prompt = RECORDING_SOLO_EVAL_PROMPT.format(
         transcript=req.transcript[:8000],
     )
-    response = llm.invoke([
-        SystemMessage(content="你是录音评估引擎。只返回 JSON，不要其他内容。"),
-        HumanMessage(content=eval_prompt),
-    ])
+    response = await asyncio.to_thread(
+        llm.invoke,
+        [
+            SystemMessage(content="你是录音评估引擎。只返回 JSON，不要其他内容。"),
+            HumanMessage(content=eval_prompt),
+        ],
+    )
 
     try:
         eval_result = normalize_drill_evaluation_payload(_parse_json_response(response.content), None).model_dump()
@@ -1693,30 +1900,33 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user)):
     }
 
 
-@router.post("/interview/end/{session_id}")
-async def end_interview(session_id: str, body: EndDrillRequest = None,
-                        user_id: str = Depends(get_current_user)):
-    """End interview → evaluate → generate review → update profile."""
-
-    # ── Drill mode: batch evaluate ──
-    if session_id in _drill_sessions:
-        entry = _drill_sessions[session_id]
-        if entry.get("user_id") != user_id:
-            raise HTTPException(403, "Access denied.")
-
+async def _run_drill_review_task(session_id: str, entry: dict, answers: list[dict], user_id: str):
+    task = _drill_review_tasks.get(session_id) or {}
+    started_at = datetime.now().isoformat()
+    _drill_review_tasks[session_id] = {
+        **task,
+        "status": "running",
+        "started_at": started_at,
+    }
+    upsert_analysis_task(
+        session_id,
+        session_id=session_id,
+        task_type="drill_review",
+        status="running",
+        user_id=user_id,
+        meta={"topic": entry.get("topic")},
+        created_at=task.get("created_at"),
+        started_at=started_at,
+    )
+    try:
         topic = entry["topic"]
         questions = entry["questions"]
-        answers = body.answers if body and body.answers else []
 
-        # Save answers to SQLite
         save_drill_answers(session_id, answers, user_id=user_id)
-
-        # Batch evaluate (1 LLM call)
         eval_result = evaluate_drill_answers(topic, questions, answers, user_id)
         scores = eval_result.get("scores", [])
         overall = eval_result.get("overall", {})
 
-        # Attach difficulty from questions to scores (for mastery calculation)
         q_diff = {q["id"]: q.get("difficulty", 3) for q in questions}
         for s in scores:
             s.setdefault("difficulty", q_diff.get(s.get("question_id"), 3))
@@ -1735,7 +1945,6 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
             q = next((item for item in questions if item.get("id") == s.get("question_id")), None)
             if q:
                 s.setdefault("training_label", q.get("training_label"))
-                s.setdefault("training_intent", q.get("training_intent"))
                 s.setdefault("focus_area", q.get("focus_area"))
         training_label_stats = _build_training_label_stats(questions, scores, overall.get("targeting_stats"))
         if training_label_stats:
@@ -1768,10 +1977,7 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
         if strategy_meta_review:
             overall["strategy_meta_review"] = strategy_meta_review
 
-        # Generate review text from eval
         review = _format_drill_review(questions, answers, scores, overall)
-
-        # Save to SQLite
         auto_score = await _auto_score_interview(InterviewScoreRequest(
             mode="topic_drill",
             topic=topic,
@@ -1780,14 +1986,12 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
         ), user_id)
         save_review(session_id, review, scores, overall.get("new_weak_points", []), overall, auto_score=auto_score, user_id=user_id)
 
-        # Update profile (1 LLM call via Mem0 pipeline — uses overall data)
         await _update_drill_profile(topic, overall, scores, len(questions), user_id)
         targeting_stats = dict(overall.get("targeting_stats") or {})
         if overall.get("practice_comparison"):
             targeting_stats["practice_comparison"] = overall.get("practice_comparison")
         _track_weak_point_repairs(topic, targeting_stats, user_id, overall.get("strategy_meta_review"))
 
-        # Update spaced repetition state for evaluated weak points
         from backend.spaced_repetition import update_weak_point_sr
         for s in scores:
             wp = s.get("weak_point")
@@ -1798,9 +2002,10 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
             elif wp and isinstance(detail.get("total_score"), (int, float)):
                 update_weak_point_sr(topic, wp, round(detail.get("total_score", 0) / 2.5, 1), user_id)
 
-        del _drill_sessions[session_id]
+        if session_id in _drill_sessions:
+            del _drill_sessions[session_id]
 
-        return {
+        result = {
             "session_id": session_id,
             "mode": "topic_drill",
             "review": review,
@@ -1808,8 +2013,203 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
             "overall": overall,
             "auto_score": auto_score,
         }
+        finished_at = datetime.now().isoformat()
+        _drill_review_tasks[session_id] = {
+            "status": "completed",
+            "created_at": task.get("created_at"),
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "result": result,
+        }
+        upsert_analysis_task(
+            session_id,
+            session_id=session_id,
+            task_type="drill_review",
+            status="completed",
+            user_id=user_id,
+            meta={"topic": entry.get("topic")},
+            result=result,
+            created_at=task.get("created_at"),
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+    except Exception as e:
+        error_text = getattr(e, "detail", None) or str(e) or "评估失败"
+        finished_at = datetime.now().isoformat()
+        _drill_review_tasks[session_id] = {
+            "status": "failed",
+            "created_at": task.get("created_at"),
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "error": error_text,
+        }
+        upsert_analysis_task(
+            session_id,
+            session_id=session_id,
+            task_type="drill_review",
+            status="failed",
+            user_id=user_id,
+            meta={"topic": entry.get("topic")},
+            error=error_text,
+            created_at=task.get("created_at"),
+            started_at=started_at,
+            finished_at=finished_at,
+        )
 
-    # ── Resume mode: existing flow ──
+
+async def _run_resume_review_task(session_id: str, entry: dict, user_id: str):
+    task = _resume_review_tasks.get(session_id) or {}
+    started_at = datetime.now().isoformat()
+    _resume_review_tasks[session_id] = {
+        **task,
+        "status": "running",
+        "started_at": started_at,
+    }
+    upsert_analysis_task(
+        session_id,
+        session_id=session_id,
+        task_type="resume_review",
+        status="running",
+        user_id=user_id,
+        meta={"topic": entry.get("topic")},
+        created_at=task.get("created_at"),
+        started_at=started_at,
+    )
+    try:
+        graph = entry["graph"]
+        config = entry["config"]
+        state = graph.get_state(config)
+        messages = state.values.get("messages", [])
+        scores = state.values.get("scores", [])
+        weak_points = state.values.get("weak_points", [])
+        eval_history = state.values.get("eval_history", [])
+        topic_name = state.values.get("topic_name", entry.get("topic"))
+
+        review = generate_review(
+            mode=entry["mode"],
+            messages=messages,
+            scores=scores,
+            weak_points=weak_points,
+            topic=topic_name,
+            eval_history=eval_history,
+        )
+
+        extraction = await update_profile_after_interview(
+            mode=entry["mode"].value,
+            topic=entry.get("topic"),
+            messages=messages,
+            user_id=user_id,
+            scores=scores,
+        )
+
+        resume_overall = {}
+        if extraction.get("dimension_scores"):
+            resume_overall["dimension_scores"] = extraction["dimension_scores"]
+        if extraction.get("avg_score"):
+            resume_overall["avg_score"] = extraction["avg_score"]
+        auto_score = await _auto_score_interview(InterviewScoreRequest(
+            mode="resume",
+            topic=entry.get("topic"),
+            review=review,
+            transcript=[{"role": "human" if isinstance(m, HumanMessage) else "assistant", "content": getattr(m, "content", "")} for m in messages if getattr(m, "content", None)],
+        ), user_id)
+        save_review(session_id, review, scores, weak_points, overall=resume_overall, auto_score=auto_score, user_id=user_id)
+
+        if session_id in _graphs:
+            del _graphs[session_id]
+
+        result = {
+            "session_id": session_id,
+            "mode": "resume",
+            "review": review,
+            "profile_update": {
+                "new_weak_points": extraction.get("weak_points", []),
+                "new_strong_points": extraction.get("strong_points", []),
+                "session_summary": extraction.get("session_summary", ""),
+            },
+            "dimension_scores": extraction.get("dimension_scores"),
+            "avg_score": extraction.get("avg_score"),
+            "auto_score": auto_score,
+        }
+        finished_at = datetime.now().isoformat()
+        _resume_review_tasks[session_id] = {
+            "status": "completed",
+            "created_at": task.get("created_at"),
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "result": result,
+        }
+        upsert_analysis_task(
+            session_id,
+            session_id=session_id,
+            task_type="resume_review",
+            status="completed",
+            user_id=user_id,
+            meta={"topic": entry.get("topic")},
+            result=result,
+            created_at=task.get("created_at"),
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+    except Exception as e:
+        error_text = getattr(e, "detail", None) or str(e) or "复盘生成失败"
+        finished_at = datetime.now().isoformat()
+        _resume_review_tasks[session_id] = {
+            "status": "failed",
+            "created_at": task.get("created_at"),
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "error": error_text,
+        }
+        upsert_analysis_task(
+            session_id,
+            session_id=session_id,
+            task_type="resume_review",
+            status="failed",
+            user_id=user_id,
+            meta={"topic": entry.get("topic")},
+            error=error_text,
+            created_at=task.get("created_at"),
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+
+
+@router.post("/interview/end/{session_id}")
+async def end_interview(session_id: str, body: EndDrillRequest = None,
+                        background_tasks: BackgroundTasks = None,
+                        user_id: str = Depends(get_current_user)):
+    """End interview → evaluate → generate review → update profile."""
+
+    # ── Drill mode: batch evaluate ──
+    if session_id in _drill_sessions:
+        entry = _drill_sessions[session_id]
+        if entry.get("user_id") != user_id:
+            raise HTTPException(403, "Access denied.")
+
+        answers = body.answers if body and body.answers else []
+        created_at = datetime.now().isoformat()
+        _drill_review_tasks[session_id] = {
+            "status": "queued",
+            "created_at": created_at,
+        }
+        upsert_analysis_task(
+            session_id,
+            session_id=session_id,
+            task_type="drill_review",
+            status="queued",
+            user_id=user_id,
+            meta={"topic": entry.get("topic")},
+            created_at=created_at,
+        )
+        background_tasks.add_task(_run_drill_review_task, session_id, entry, answers, user_id)
+        return {
+            "session_id": session_id,
+            "mode": "topic_drill",
+            "status": "queued",
+        }
+
+    # ── Resume mode: async review generation ──
     if session_id not in _graphs:
         raise HTTPException(404, "Session not found.")
 
@@ -1817,61 +2217,25 @@ async def end_interview(session_id: str, body: EndDrillRequest = None,
     if entry.get("user_id") != user_id:
         raise HTTPException(403, "Access denied.")
 
-    graph = entry["graph"]
-    config = entry["config"]
-
-    state = graph.get_state(config)
-    messages = state.values.get("messages", [])
-    scores = state.values.get("scores", [])
-    weak_points = state.values.get("weak_points", [])
-    eval_history = state.values.get("eval_history", [])
-    topic_name = state.values.get("topic_name", entry.get("topic"))
-
-    review = generate_review(
-        mode=entry["mode"],
-        messages=messages,
-        scores=scores,
-        weak_points=weak_points,
-        topic=topic_name,
-        eval_history=eval_history,
-    )
-
-    extraction = await update_profile_after_interview(
-        mode=entry["mode"].value,
-        topic=entry.get("topic"),
-        messages=messages,
+    created_at = datetime.now().isoformat()
+    _resume_review_tasks[session_id] = {
+        "status": "queued",
+        "created_at": created_at,
+    }
+    upsert_analysis_task(
+        session_id,
+        session_id=session_id,
+        task_type="resume_review",
+        status="queued",
         user_id=user_id,
-        scores=scores,
+        meta={"topic": entry.get("topic")},
+        created_at=created_at,
     )
-
-    # Persist dimension_scores + avg_score into session for later review loading
-    resume_overall = {}
-    if extraction.get("dimension_scores"):
-        resume_overall["dimension_scores"] = extraction["dimension_scores"]
-    if extraction.get("avg_score"):
-        resume_overall["avg_score"] = extraction["avg_score"]
-    auto_score = await _auto_score_interview(InterviewScoreRequest(
-        mode="resume",
-        topic=entry.get("topic"),
-        review=review,
-        transcript=[{"role": "human" if isinstance(m, HumanMessage) else "assistant", "content": getattr(m, "content", "")} for m in messages if getattr(m, "content", None)],
-    ), user_id)
-    save_review(session_id, review, scores, weak_points, overall=resume_overall, auto_score=auto_score, user_id=user_id)
-
-    del _graphs[session_id]
-
+    background_tasks.add_task(_run_resume_review_task, session_id, entry, user_id)
     return {
         "session_id": session_id,
         "mode": "resume",
-        "review": review,
-        "profile_update": {
-            "new_weak_points": extraction.get("weak_points", []),
-            "new_strong_points": extraction.get("strong_points", []),
-            "session_summary": extraction.get("session_summary", ""),
-        },
-        "dimension_scores": extraction.get("dimension_scores"),
-        "avg_score": extraction.get("avg_score"),
-        "auto_score": auto_score,
+        "status": "queued",
     }
 
 
@@ -2044,7 +2408,6 @@ async def generate_core_knowledge(topic: str, user_id: str = Depends(get_current
     if topic not in topics:
         raise HTTPException(400, f"Unknown topic: {topic}")
     from backend.llm_provider import get_langchain_llm
-    from langchain_core.messages import SystemMessage, HumanMessage
 
     topic_name = topics[topic].get("name", topic)
 
@@ -2072,6 +2435,137 @@ async def generate_core_knowledge(topic: str, user_id: str = Depends(get_current
     _index_cache.pop((user_id, topic), None)
 
     return {"ok": True, "content": content}
+
+
+@router.post("/knowledge/{topic}/draft")
+async def generate_knowledge_draft(topic: str, body: dict, user_id: str = Depends(get_current_user)):
+    """Generate a single knowledge article draft for a topic/title."""
+    topics = load_topics(user_id)
+    if topic not in topics:
+        raise HTTPException(400, f"Unknown topic: {topic}")
+
+    title = (body.get("title") or "").strip()
+    prompt_hint = (body.get("prompt") or "").strip()
+    if not title:
+        raise HTTPException(400, "title is required")
+
+    from backend.llm_provider import get_langchain_llm
+    topic_name = topics[topic].get("name", topic)
+    llm = get_langchain_llm()
+    resp = llm.invoke([
+        SystemMessage(content="你是一位资深技术面试官和知识整理助手，擅长把一个技术点写成适合面试训练的知识文档。"),
+        HumanMessage(content=(
+            f"请为专题「{topic_name}」下的知识点「{title}」生成一份 Markdown 初稿。\n\n"
+            f"额外要求：{prompt_hint or '尽量兼顾概念、原理、面试追问、易错点和工程实践。'}\n\n"
+            "输出要求：\n"
+            "- 直接输出 Markdown，不要包代码块\n"
+            "- 一级标题使用该知识点名称\n"
+            "- 至少包含：核心概念、工作原理、面试常问、常见误区、实践建议\n"
+            "- 内容简洁但有信息密度，适合后续出题和复习\n"
+        )),
+    ])
+    return {"ok": True, "content": resp.content.strip()}
+
+
+@router.post("/knowledge/{topic}/refine")
+async def refine_knowledge_content(topic: str, body: dict, user_id: str = Depends(get_current_user)):
+    """Refine raw notes into structured markdown knowledge content."""
+    topics = load_topics(user_id)
+    if topic not in topics:
+        raise HTTPException(400, f"Unknown topic: {topic}")
+
+    title = (body.get("title") or "").strip()
+    raw_content = (body.get("content") or "").strip()
+    if not raw_content:
+        raise HTTPException(400, "content is required")
+
+    from backend.llm_provider import get_langchain_llm
+    topic_name = topics[topic].get("name", topic)
+    llm = get_langchain_llm()
+    resp = llm.invoke([
+        SystemMessage(content="你是一位技术知识编辑，擅长把零散笔记整理成结构化、可用于面试训练的 Markdown 文档。"),
+        HumanMessage(content=(
+            f"请把下面这份属于「{topic_name}」的原始内容整理成一份结构清晰的 Markdown 知识文档。\n\n"
+            f"建议标题：{title or '请根据内容自动拟定'}\n\n"
+            "整理要求：\n"
+            "- 保留原始内容里的关键信息，不要胡编\n"
+            "- 结构化成清晰的标题和要点\n"
+            "- 优先整理出：概念、原理、关键机制、面试考点、易错点、实践建议\n"
+            "- 如果原文比较乱，可以合并同类项、删去明显重复\n"
+            "- 直接输出 Markdown，不要包代码块\n\n"
+            f"原始内容：\n{raw_content}"
+        )),
+    ])
+    return {"ok": True, "content": resp.content.strip()}
+
+
+@router.post("/knowledge/{topic}/split")
+async def split_knowledge_content(topic: str, body: dict, user_id: str = Depends(get_current_user)):
+    """Split a long raw note into multiple knowledge markdown files."""
+    topics = load_topics(user_id)
+    if topic not in topics:
+        raise HTTPException(400, f"Unknown topic: {topic}")
+
+    raw_content = (body.get("content") or "").strip()
+    preferred_count = int(body.get("preferred_count") or 4)
+    if not raw_content:
+        raise HTTPException(400, "content is required")
+    preferred_count = max(2, min(preferred_count, 8))
+
+    from backend.llm_provider import get_langchain_llm
+    topic_name = topics[topic].get("name", topic)
+    llm = get_langchain_llm()
+    resp = llm.invoke([
+        SystemMessage(content="你是一位技术知识架构师，擅长把长文拆成多个适合面试训练和知识库检索的 Markdown 文档。你必须返回严格 JSON。"),
+        HumanMessage(content=(
+            f"请把下面这份属于「{topic_name}」的长文或原始笔记，拆成 {preferred_count} 份左右的知识文档。\n\n"
+            "目标：\n"
+            "- 每份文档只聚焦一个清晰主题\n"
+            "- 每份都适合单独入知识库\n"
+            "- 标题要具体，不要太泛\n"
+            "- 内容保留关键信息，整理成 Markdown\n"
+            "- 不要胡编原文没有的重要事实\n\n"
+            "请只返回 JSON，格式如下：\n"
+            '{"files":[{"title":"Redis 持久化机制","reason":"这部分内容讨论 RDB/AOF 与恢复流程","content":"# Redis 持久化机制\\n\\n..."}]}'
+            "\n\n原始内容：\n"
+            f"{raw_content}"
+        )),
+    ])
+
+    text = (resp.content or "").strip()
+    try:
+        payload = json.loads(text)
+    except Exception:
+        match = re.search(r'\{[\s\S]*\}$', text)
+        if not match:
+            raise HTTPException(500, "AI 拆分返回格式无效")
+        try:
+            payload = json.loads(match.group(0))
+        except Exception:
+            raise HTTPException(500, "AI 拆分返回 JSON 解析失败")
+
+    files = []
+    for item in payload.get("files", []) if isinstance(payload, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        content = str(item.get("content") or "").strip()
+        if not title or not content:
+            continue
+        filename = re.sub(r'[\\/:*?"<>|]+', '-', title)
+        if not filename.endswith('.md'):
+            filename += '.md'
+        files.append({
+            "title": title,
+            "filename": filename,
+            "reason": str(item.get("reason") or "").strip(),
+            "content": content,
+        })
+
+    if not files:
+        raise HTTPException(500, "AI 没有产出可导入的拆分结果")
+
+    return {"ok": True, "files": files}
 
 
 @router.get("/knowledge/{topic}/high_freq")
@@ -2163,7 +2657,7 @@ async def generate_reference_answer(body: dict, user_id: str = Depends(get_curre
     )
 
     llm = get_langchain_llm()
-    resp = llm.invoke([HumanMessage(content=prompt)])
+    resp = await asyncio.to_thread(llm.invoke, [HumanMessage(content=prompt)])
     answer = resp.content.strip()
     payload = {
         "question": question,
@@ -2226,7 +2720,7 @@ async def followup_reference_answer(body: dict, user_id: str = Depends(get_curre
     )
 
     llm = get_langchain_llm()
-    resp = llm.invoke([HumanMessage(content=prompt)])
+    resp = await asyncio.to_thread(llm.invoke, [HumanMessage(content=prompt)])
     answer = resp.content.strip()
     item = {
         "question": question,
@@ -2301,7 +2795,7 @@ async def generate_improved_answer(body: dict, user_id: str = Depends(get_curren
     )
 
     llm = get_langchain_llm()
-    resp = llm.invoke([HumanMessage(content=prompt)])
+    resp = await asyncio.to_thread(llm.invoke, [HumanMessage(content=prompt)])
     improved_answer = resp.content.strip()
     payload = {
         "question": question,
@@ -2351,6 +2845,29 @@ async def get_review(session_id: str, user_id: str = Depends(get_current_user)):
             )
         except Exception:
             session["auto_score"] = {}
+
+    if isinstance(session.get("questions"), list):
+        sanitized_questions = []
+        for q in session.get("questions") or []:
+            if isinstance(q, dict):
+                nq = dict(q)
+                nq.pop("training_intent", None)
+                sanitized_questions.append(nq)
+            else:
+                sanitized_questions.append(q)
+        session["questions"] = sanitized_questions
+
+    if isinstance(session.get("scores"), list):
+        sanitized_scores = []
+        for s in session.get("scores") or []:
+            if isinstance(s, dict):
+                ns = dict(s)
+                ns.pop("training_intent", None)
+                sanitized_scores.append(ns)
+            else:
+                sanitized_scores.append(s)
+        session["scores"] = sanitized_scores
+
     return session
 
 

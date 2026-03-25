@@ -1,7 +1,7 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload, FileText, Users, User, Loader2 } from "lucide-react";
-import { transcribeRecording, analyzeRecording } from "../api/interview";
+import { transcribeRecording, analyzeRecording, getAnalysisStatus } from "../api/interview";
 
 export default function RecordingAnalysis() {
   const navigate = useNavigate();
@@ -16,6 +16,8 @@ export default function RecordingAnalysis() {
 
   const [transcribing, setTranscribing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisSessionId, setAnalysisSessionId] = useState(null);
+  const [analysisStatus, setAnalysisStatus] = useState(null);
   const [error, setError] = useState(null);
 
   const handleFileChange = (e) => {
@@ -44,21 +46,60 @@ export default function RecordingAnalysis() {
     if (!transcript.trim()) return;
     setAnalyzing(true);
     setError(null);
+    setAnalysisStatus("queued");
     try {
       const data = await analyzeRecording(
         transcript, recordingMode, company || null, position || null
       );
-      navigate(`/review/${data.session_id}`, {
-        state: {
-          ...data,
-          mode: "recording",
-        },
-      });
+      setAnalysisSessionId(data.session_id);
+      setAnalysisStatus(data.status || "queued");
     } catch (err) {
       setError("分析失败: " + err.message);
       setAnalyzing(false);
+      setAnalysisStatus(null);
     }
   };
+
+  useEffect(() => {
+    if (!analysisSessionId) return undefined;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const data = await getAnalysisStatus(analysisSessionId);
+        if (cancelled) return;
+        setAnalysisStatus(data.status || "queued");
+        if (data.status === "completed") {
+          navigate(`/review/${data.session_id}`, {
+            state: {
+              ...data,
+              mode: "recording",
+            },
+          });
+          return;
+        }
+        if (data.status === "failed") {
+          setError("分析失败: " + (data.error || "请重试"));
+          setAnalyzing(false);
+          setAnalysisSessionId(null);
+          return;
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError("分析状态查询失败: " + err.message);
+          setAnalyzing(false);
+          setAnalysisSessionId(null);
+        }
+        return;
+      }
+      if (!cancelled) {
+        setTimeout(poll, 1500);
+      }
+    };
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [analysisSessionId, navigate]);
 
   const canAnalyze = transcript.trim() && !analyzing;
 
@@ -223,7 +264,12 @@ export default function RecordingAnalysis() {
           </div>
         )}
 
-        {/* Error */}
+        {/* Status / Error */}
+        {analyzing && analysisSessionId && !error && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
+            录音分析已转入后台执行，完成后会自动跳转到复盘页。
+          </div>
+        )}
         {error && (
           <div className="mb-4 px-4 py-3 rounded-xl bg-red/10 border border-red/20 text-sm text-red">
             {error}
@@ -243,7 +289,7 @@ export default function RecordingAnalysis() {
             {analyzing ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 size={18} className="animate-spin" />
-                AI 分析中...
+                {analysisStatus === "queued" ? "已进入队列，准备分析..." : analysisStatus === "running" ? "AI 分析中..." : "处理中..."}
               </span>
             ) : (
               "开始分析"

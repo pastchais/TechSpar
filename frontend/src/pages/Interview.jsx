@@ -91,13 +91,12 @@ export default function Interview() {
         question_id: q.id,
         answer: answers[q.id] || "",
       }));
-      const data = await endInterview(sessionId, answerList);
+      await endInterview(sessionId, answerList);
       navigate(`/review/${sessionId}`, {
-        state: { review: data.review, scores: data.scores, overall: data.overall, questions, answers: answerList, mode: "topic_drill", topic: initData.topic },
+        state: { questions, answers: answerList, mode: "topic_drill", topic: initData.topic },
       });
     } catch (err) {
       alert("评估失败: " + err.message);
-    } finally {
       setSubmitting(false);
     }
   };
@@ -125,19 +124,15 @@ export default function Interview() {
   const handleEndResume = async () => {
     setReviewing(true);
     try {
-      const data = await endInterview(sessionId);
+      await endInterview(sessionId);
       navigate(`/review/${sessionId}`, {
         state: {
-          review: data.review,
           messages,
           mode: "resume",
-          dimension_scores: data.dimension_scores,
-          avg_score: data.avg_score,
         },
       });
     } catch (err) {
       alert("复盘生成失败: " + err.message);
-    } finally {
       setReviewing(false);
     }
   };
@@ -272,9 +267,6 @@ export default function Interview() {
                     <ReactMarkdown>{currentQ.question}</ReactMarkdown>
                   </div>
                 </div>
-                {currentQ.training_intent && (
-                  <div className="mt-3 text-[13px] text-dim leading-[1.7]">训练意图：{currentQ.training_intent}</div>
-                )}
               </div>
 
               {/* Input area */}

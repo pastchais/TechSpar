@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { PageTitle, SectionTitle, SubtleButton, Badge, OutlineButton } from "../components/ui.jsx";
 import { BookOpen } from "lucide-react";
-import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview, getHistory } from "../api/interview";
+import { getReview, getReferenceAnswer, followupReferenceAnswer, getImprovedAnswer, scoreInterviewAnswer, getTopics, startInterview, getHistory, getAnalysisStatus } from "../api/interview";
 import { topicDisplayName } from "../utils/topicLabels";
 
 function getScoreColor(score) {
@@ -642,7 +642,7 @@ function DrillReview({
   const handleRefAnswer = async (questionId, question, regenerate = false) => {
     try {
       setRefLoading((prev) => ({ ...prev, [questionId]: true }));
-      const data = await getReferenceAnswer({ session_id: sessionId, question_id: questionId, question, regenerate });
+      const data = await getReferenceAnswer(sessionId, topic, question, questionId, regenerate);
       setRefAnswers((prev) => ({ ...prev, [questionId]: data }));
     } finally {
       setRefLoading((prev) => ({ ...prev, [questionId]: false }));
@@ -654,8 +654,16 @@ function DrillReview({
     if (!followup) return;
     try {
       setFollowupLoading((prev) => ({ ...prev, [questionId]: true }));
-      const data = await followupReferenceAnswer({ session_id: sessionId, question_id: questionId, question, followup });
-      setFollowupHistory((prev) => ({ ...prev, [questionId]: [...(prev[questionId] || []), data] }));
+      const data = await followupReferenceAnswer(
+        sessionId,
+        topic,
+        question,
+        followup,
+        questionId,
+        refAnswers[questionId]?.reference_answer || "",
+      );
+      setFollowupHistory((prev) => ({ ...prev, [questionId]: data?.history || [...(prev[questionId] || []), data] }));
+      setOpenedQuestionState((prev) => ({ ...prev, [questionId]: { ...(prev[questionId] || {}), followup: true } }));
       setFollowupInput((prev) => ({ ...prev, [questionId]: "" }));
     } finally {
       setFollowupLoading((prev) => ({ ...prev, [questionId]: false }));
@@ -665,7 +673,14 @@ function DrillReview({
   const handleImprovedAnswer = async (questionId, question) => {
     try {
       setImprovedLoading((prev) => ({ ...prev, [questionId]: true }));
-      const data = await getImprovedAnswer({ session_id: sessionId, question_id: questionId, question });
+      const data = await getImprovedAnswer(
+        sessionId,
+        topic,
+        question,
+        answerMap[questionId] || "",
+        questionId,
+        refAnswers[questionId]?.reference_answer || "",
+      );
       setImprovedAnswers((prev) => ({ ...prev, [questionId]: data }));
     } finally {
       setImprovedLoading((prev) => ({ ...prev, [questionId]: false }));
@@ -795,6 +810,7 @@ function DrillReview({
         const refSectionOpen = sectionState.reference ?? (hasReference && !hasImproved);
         const improvedSectionOpen = sectionState.improved ?? hasImproved;
         const scoreSectionOpen = sectionState.score ?? (scoreNeedsOpen || (s.key_missing?.length > 0));
+        const followupSectionOpen = sectionState.followup ?? true;
 
         return (
           <div className="mb-4 rounded-[24px] border border-border bg-card/80 p-3 md:p-4">
@@ -824,9 +840,6 @@ function DrillReview({
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <span className={`text-[12px] font-semibold ${active ? "text-accent-light" : "text-text"}`}>Q{idx + 1}</span>
                             <div className="flex items-center gap-1">
-                              {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
-                              {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
-                              {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
                               {item.hasReference && <span className="h-2 w-2 rounded-full bg-accent-light" title="已有参考答案" />}
                               {item.hasImproved && <span className="h-2 w-2 rounded-full bg-green" title="已有改进版答案" />}
                               {item.hasFollowup && <span className="h-2 w-2 rounded-full bg-orange" title="已有 AI 追问记录" />}
@@ -905,7 +918,6 @@ function DrillReview({
                   </div>
 
                   <div className="text-[15px] font-medium leading-relaxed mb-2">{q.question}</div>
-                  {q.training_intent && <div className="mb-3 text-[12px] text-dim leading-[1.7]">训练意图：{q.training_intent}</div>}
 
                   {isSkipped ? (
                     <div className="rounded-lg border border-border bg-hover px-3 py-3 text-sm text-dim">这题未作答，建议直接跳到下一题或回到训练里补答。</div>
@@ -931,7 +943,7 @@ function DrillReview({
                         )}
                       </section>
 
-                      <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={scoreSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), score: e.currentTarget.open } }))}>
+                      <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={scoreSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), score: !!e.currentTarget?.open } }))}>
                         <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
                           <span className="text-[13px] font-semibold text-text">评分细项</span>
                           <span className="text-[11px] text-dim group-open:hidden">展开</span>
@@ -945,7 +957,7 @@ function DrillReview({
 
                       {topic && (
                         <>
-                          <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={refSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), reference: e.currentTarget.open } }))}>
+                          <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={refSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), reference: !!e.currentTarget?.open } }))}>
                             <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
                               <span className="text-[13px] font-semibold text-text flex items-center gap-1.5"><BookOpen size={13} /> 标准参考答案</span>
                               <span className="text-[11px] text-dim group-open:hidden">展开</span>
@@ -974,7 +986,7 @@ function DrillReview({
                           </details>
 
                           {improvedAnswers[q.id]?.improved_answer && (
-                            <details className="rounded-2xl border border-green/20 bg-green/5 px-3.5 py-3 group" open={improvedSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), improved: e.currentTarget.open } }))}>
+                            <details className="rounded-2xl border border-green/20 bg-green/5 px-3.5 py-3 group" open={improvedSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), improved: !!e.currentTarget?.open } }))}>
                               <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
                                 <span className="text-[13px] font-semibold text-text">改进版答案</span>
                                 <span className="text-[11px] text-dim group-open:hidden">展开</span>
@@ -994,7 +1006,7 @@ function DrillReview({
                           )}
 
                           {followupOpen[q.id] && (
-                            <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={scoreSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), score: e.currentTarget.open } }))}>
+                            <details className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 group" open={followupSectionOpen} onToggle={(e) => setOpenedQuestionState((prev) => ({ ...prev, [q.id]: { ...(prev[q.id] || {}), followup: !!e.currentTarget?.open } }))}>
                               <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
                                 <span className="text-[13px] font-semibold text-text">AI 继续追问</span>
                                 <span className="text-[11px] text-dim group-open:hidden">展开</span>
@@ -1078,6 +1090,9 @@ export default function Review() {
   const [practiceTrend, setPracticeTrend] = useState([]);
   const [showTranscript, setShowTranscript] = useState(false);
   const [loading, setLoading] = useState(!review && !scores);
+  const [pendingRecording, setPendingRecording] = useState(false);
+  const [pendingDrillReview, setPendingDrillReview] = useState(false);
+  const [pendingResumeReview, setPendingResumeReview] = useState(false);
 
   useEffect(() => {
     getTopics().then(setTopics).catch(() => {});
@@ -1085,9 +1100,16 @@ export default function Review() {
 
   useEffect(() => {
     if (!review && !scores) {
-      setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
-      getReview(sessionId)
-        .then((data) => {
+      let cancelled = false;
+      let retryTimer = null;
+      const load = async () => {
+        setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
+        try {
+          const data = await getReview(sessionId);
+          if (cancelled) return;
+          setPendingRecording(false);
+          setPendingDrillReview(false);
+          setPendingResumeReview(false);
           setReview(data.review);
           if (data.scores) setScores(data.scores);
           if (data.questions) setQuestions(data.questions);
@@ -1123,9 +1145,34 @@ export default function Review() {
               transcript: data.transcript || [],
             }).then(setAutoScore).catch(() => {});
           }
-        })
-        .catch((err) => setReview("加载失败: " + err.message))
-        .finally(() => setLoading(false));
+        } catch (err) {
+          try {
+            const status = await getAnalysisStatus(sessionId);
+            if (cancelled) return;
+            setPendingRecording(status.mode === "recording" && ["queued", "running"].includes(status.status));
+            setPendingDrillReview(status.mode === "topic_drill" && ["queued", "running"].includes(status.status));
+            setPendingResumeReview(status.mode === "resume" && ["queued", "running"].includes(status.status));
+            if (["queued", "running"].includes(status.status)) {
+              setMode(status.mode || mode);
+              retryTimer = setTimeout(load, 1500);
+              return;
+            }
+            if (status.status === "failed") {
+              setReview("加载失败: " + (status.error || "任务执行失败"));
+              return;
+            }
+          } catch {
+            if (!cancelled) setReview("加载失败: " + err.message);
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      };
+      load();
+      return () => {
+        cancelled = true;
+        if (retryTimer) clearTimeout(retryTimer);
+      };
     }
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1142,8 +1189,8 @@ export default function Review() {
       .catch(() => {});
   }, [topic, overall?.practice_comparison?.focus_label]);
 
-  if (loading) {
-    return <div className="text-center py-15 text-dim">加载复盘报告中...</div>;
+  if (loading || pendingRecording || pendingDrillReview || pendingResumeReview) {
+    return <div className="text-center py-15 text-dim">{pendingRecording ? "录音分析进行中，复盘报告生成后会自动刷新..." : pendingDrillReview ? "训练评估进行中，复盘报告生成后会自动刷新..." : pendingResumeReview ? "面试复盘生成中，报告完成后会自动刷新..." : "加载复盘报告中..."}</div>;
   }
 
   const showDrill = isDrill || isRecordingDual || (mode === "topic_drill" && (scores || questions.length > 0)) || (mode === "recording" && stateData.recording_mode === "dual");

@@ -5,16 +5,20 @@ from backend.config import settings
 
 _embedding_instance = None
 _llama_llm_instance = None
+_langchain_llm_instance = None
 
 
 def get_langchain_llm():
     """LangChain ChatModel for LangGraph nodes (via OpenAI-compatible proxy)."""
-    return ChatOpenAI(
-        model=settings.model,
-        api_key=settings.api_key,
-        base_url=settings.api_base,
-        temperature=settings.temperature,
-    )
+    global _langchain_llm_instance
+    if _langchain_llm_instance is None:
+        _langchain_llm_instance = ChatOpenAI(
+            model=settings.model,
+            api_key=settings.api_key,
+            base_url=settings.api_base,
+            temperature=settings.temperature,
+        )
+    return _langchain_llm_instance
 
 
 def get_llama_llm():

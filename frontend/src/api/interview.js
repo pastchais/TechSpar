@@ -134,6 +134,20 @@ export async function endInterview(sessionId, answers = null) {
   return res.json();
 }
 
+export async function getAnalysisStatus(sessionId) {
+  const res = await authFetch(`${API_BASE}/analysis/status/${sessionId}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getInterviewEndStatus(sessionId) {
+  return getAnalysisStatus(sessionId);
+}
+
+export async function getResumeEndStatus(sessionId) {
+  return getAnalysisStatus(sessionId);
+}
+
 export async function getReview(sessionId) {
   const res = await authFetch(`${API_BASE}/interview/review/${sessionId}`);
   if (!res.ok) throw new Error(await res.text());
@@ -301,6 +315,36 @@ export async function generateKnowledge(topic) {
   return res.json();
 }
 
+export async function generateKnowledgeDraft(topic, title, prompt = "") {
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/draft`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, prompt }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function refineKnowledgeContent(topic, title, content) {
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/refine`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, content }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function splitKnowledgeContent(topic, content, preferredCount = 4) {
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/split`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, preferred_count: preferredCount }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function getKnowledgeQueryHints(query) {
   const res = await authFetch(`${API_BASE}/knowledge/query-hints`, {
     method: "POST",
@@ -334,6 +378,12 @@ export async function analyzeRecording(transcript, recordingMode, company, posit
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getRecordingAnalysisStatus(sessionId) {
+  const res = await authFetch(`${API_BASE}/recording/status/${sessionId}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }

@@ -76,6 +76,22 @@ def _get_conn() -> sqlite3.Connection:
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS analysis_tasks (
+            task_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            task_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            user_id TEXT,
+            meta_json TEXT,
+            result_json TEXT,
+            error TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            started_at TEXT,
+            finished_at TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     # Migrate: add columns if missing (existing DBs)
     for col, default in [("questions", "'[]'"), ("overall", "'{}'"), ("auto_score", "'{}'"), ("reference_answers", "'{}'"), ("reference_followups", "'{}'"), ("improved_answers", "'{}'"), ("user_id", "NULL")]:
         try:
@@ -331,8 +347,95 @@ def list_sessions(
     return {"items": items, "total": total}
 
 
+def upsert_analysis_task(task_id: str, *, session_id: str, task_type: str, status: str, user_id: str,
+                         meta: dict | None = None, result: dict | None = None, error: str | None = None,
+                         created_at: str | None = None, started_at: str | None = None,
+                         finished_at: str | None = None):
+    conn = _get_conn()
+    existing = conn.execute(
+        "SELECT task_id FROM analysis_tasks WHERE task_id = ?",
+        (task_id,),
+    ).fetchone()
+    meta_json = json.dumps(meta or {}, ensure_ascii=False) if meta is not None else None
+    result_json = json.dumps(result or {}, ensure_ascii=False) if result is not None else None
+    if existing:
+        conn.execute(
+            "UPDATE analysis_tasks SET session_id = ?, task_type = ?, status = ?, user_id = ?, meta_json = COALESCE(?, meta_json), result_json = COALESCE(?, result_json), error = ?, created_at = COALESCE(?, created_at), started_at = COALESCE(?, started_at), finished_at = COALESCE(?, finished_at), updated_at = CURRENT_TIMESTAMP WHERE task_id = ?",
+            (session_id, task_type, status, user_id, meta_json, result_json, error, created_at, started_at, finished_at, task_id),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO analysis_tasks (task_id, session_id, task_type, status, user_id, meta_json, result_json, error, created_at, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?)",
+            (task_id, session_id, task_type, status, user_id, meta_json, result_json, error, created_at, started_at, finished_at),
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_analysis_task(task_id: str, *, user_id: str) -> dict | None:
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM analysis_tasks WHERE task_id = ? AND user_id = ?",
+        (task_id, user_id),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    result = dict(row)
+    result["meta"] = json.loads(result.get("meta_json") or "{}")
+    result["result"] = json.loads(result.get("result_json") or "{}")
+    return result
+
+
+def get_latest_analysis_task_by_session(session_id: str, *, user_id: str, task_type: str | None = None) -> dict | None:
+    conn = _get_conn()
+    sql = "SELECT * FROM analysis_tasks WHERE session_id = ? AND user_id = ?"
+    params = [session_id, user_id]
+    if task_type:
+        sql += " AND task_type = ?"
+        params.append(task_type)
+    sql += " ORDER BY created_at DESC LIMIT 1"
+    row = conn.execute(sql, params).fetchone()
+    conn.close()
+    if not row:
+        return None
+    result = dict(row)
+    result["meta"] = json.loads(result.get("meta_json") or "{}")
+    result["result"] = json.loads(result.get("result_json") or "{}")
+    return result
+
+
+def list_incomplete_analysis_tasks() -> list[dict]:
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM analysis_tasks WHERE status IN ('queued', 'running') ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    results = []
+    for row in rows:
+        item = dict(row)
+        item["meta"] = json.loads(item.get("meta_json") or "{}")
+        item["result"] = json.loads(item.get("result_json") or "{}")
+        results.append(item)
+    return results
+
+
+def fail_analysis_task(task_id: str, *, error: str):
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE analysis_tasks SET status = 'failed', error = ?, finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE task_id = ? AND status IN ('queued', 'running')",
+        (error, task_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def delete_session(session_id: str, *, user_id: str) -> bool:
     conn = _get_conn()
+    conn.execute(
+        "DELETE FROM analysis_tasks WHERE session_id = ? AND user_id = ?",
+        (session_id, user_id),
+    )
     cursor = conn.execute(
         "DELETE FROM sessions WHERE session_id = ? AND user_id = ?",
         (session_id, user_id),
